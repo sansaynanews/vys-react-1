@@ -2,23 +2,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
-import dayjs from "dayjs";
 
-const evrakSchema = z.object({
-  gelen_kurum: z.string().min(1, "Gelen kurum gerekli"),
-  tur: z.string().min(1, "Evrak türü gerekli"),
-  konu: z.string().min(1, "Konu gerekli"),
+const evrakUpdateSchema = z.object({
+  gelen_kurum: z.string().optional(),
+  tur: z.string().optional(),
+  konu: z.string().min(1).optional(),
   notlar: z.string().optional(),
-  evrak_tarih: z.string().optional(),
+  evrak_tarih: z.string().optional(), // YYYY-MM-DD
   evrak_sayi: z.string().optional(),
-  gelis_tarih: z.string().optional(),
+  gelis_tarih: z.string().optional(), // YYYY-MM-DD
   teslim_alan: z.string().optional(),
-  cikis_tarihi: z.string().optional().nullable(),
-  sunus_tarihi: z.string().optional().nullable(),
-  saat: z.string().optional(),
+  sunus_tarihi: z.string().optional().or(z.literal("")).nullable(),
+  cikis_tarihi: z.string().optional().or(z.literal("")).nullable(),
 });
 
-// GET - Tekil evrak
+// GET
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -28,39 +26,16 @@ export async function GET(
     if (!session?.user) {
       return NextResponse.json({ error: "Yetkisiz erişim" }, { status: 401 });
     }
-
     const { id: paramId } = await params;
-    const id = parseInt(paramId);
-
-    const evrak = await prisma.evraklar.findUnique({
-      where: { id },
-    });
-
-    if (!evrak) {
-      return NextResponse.json({ error: "Evrak bulunamadı" }, { status: 404 });
-    }
-
-    // Tarihleri formatla
-    const formattedEvrak = {
-      ...evrak,
-      evrak_tarih: evrak.evrak_tarih ? dayjs(evrak.evrak_tarih).format("YYYY-MM-DD") : null,
-      gelis_tarih: evrak.gelis_tarih ? dayjs(evrak.gelis_tarih).format("YYYY-MM-DD") : null,
-      cikis_tarihi: evrak.cikis_tarihi ? dayjs(evrak.cikis_tarihi).format("YYYY-MM-DD") : null,
-      sunus_tarihi: evrak.sunus_tarihi ? dayjs(evrak.sunus_tarihi).format("YYYY-MM-DD") : null,
-      created_at: evrak.created_at ? dayjs(evrak.created_at).format("YYYY-MM-DD HH:mm:ss") : null,
-    };
-
-    return NextResponse.json(formattedEvrak);
+    const item = await prisma.evraklar.findUnique({ where: { id: parseInt(paramId) } });
+    if (!item) return NextResponse.json({ error: "Bulunamadı" }, { status: 404 });
+    return NextResponse.json({ data: item });
   } catch (error) {
-    console.error("Evrak GET Error:", error);
-    return NextResponse.json(
-      { error: "Evrak getirilemedi" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Hata" }, { status: 500 });
   }
 }
 
-// PUT - Evrak güncelle
+// PUT
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -72,48 +47,39 @@ export async function PUT(
     }
 
     const { id: paramId } = await params;
-    const id = parseInt(paramId);
-
     const body = await request.json();
-    const validated = evrakSchema.parse(body);
+    const validated = evrakUpdateSchema.parse(body);
 
-    await prisma.evraklar.update({
-      where: { id },
-      data: {
-        gelen_kurum: validated.gelen_kurum,
-        tur: validated.tur,
-        konu: validated.konu,
-        notlar: validated.notlar || null,
-        evrak_tarih: validated.evrak_tarih ? new Date(validated.evrak_tarih) : null,
-        evrak_sayi: validated.evrak_sayi || null,
-        gelis_tarih: validated.gelis_tarih ? new Date(validated.gelis_tarih) : null,
-        teslim_alan: validated.teslim_alan || null,
-        cikis_tarihi: validated.cikis_tarihi ? new Date(validated.cikis_tarihi) : null,
-        sunus_tarihi: validated.sunus_tarihi ? new Date(validated.sunus_tarihi) : null,
-        saat: validated.saat ? new Date(`1970-01-01T${validated.saat}`) : null,
-      },
+    const data: any = { ...validated };
+    if (data.evrak_tarih) data.evrak_tarih = new Date(data.evrak_tarih);
+    if (data.gelis_tarih) data.gelis_tarih = new Date(data.gelis_tarih);
+
+    // Allow clearing dates by sending null/empty string
+    if (data.sunus_tarihi === "") data.sunus_tarihi = null;
+    else if (data.sunus_tarihi) data.sunus_tarihi = new Date(data.sunus_tarihi);
+
+    if (data.cikis_tarihi === "") data.cikis_tarihi = null;
+    else if (data.cikis_tarihi) data.cikis_tarihi = new Date(data.cikis_tarihi);
+
+    const updated = await prisma.evraklar.update({
+      where: { id: parseInt(paramId) },
+      data,
     });
 
     return NextResponse.json({
-      message: "Evrak başarıyla güncellendi",
+      message: "Güncellendi",
+      data: updated,
     });
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: "Validasyon hatası", details: error.issues },
-        { status: 400 }
-      );
-    }
-
-    console.error("Evrak PUT Error:", error);
+    console.error(error);
     return NextResponse.json(
-      { error: "Evrak güncellenemedi" },
+      { error: "Güncelleme başarısız" },
       { status: 500 }
     );
   }
 }
 
-// DELETE - Evrak sil
+// DELETE
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -123,22 +89,10 @@ export async function DELETE(
     if (!session?.user) {
       return NextResponse.json({ error: "Yetkisiz erişim" }, { status: 401 });
     }
-
     const { id: paramId } = await params;
-    const id = parseInt(paramId);
-
-    await prisma.evraklar.delete({
-      where: { id },
-    });
-
-    return NextResponse.json({
-      message: "Evrak başarıyla silindi",
-    });
+    await prisma.evraklar.delete({ where: { id: parseInt(paramId) } });
+    return NextResponse.json({ message: "Silindi" });
   } catch (error) {
-    console.error("Evrak DELETE Error:", error);
-    return NextResponse.json(
-      { error: "Evrak silinemedi" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Hata" }, { status: 500 });
   }
 }

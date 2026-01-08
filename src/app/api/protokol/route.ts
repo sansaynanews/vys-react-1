@@ -2,19 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
-import dayjs from "dayjs";
 
-// Validation schema
 const protokolSchema = z.object({
-  sira_no: z.number().optional(),
-  ad_soyad: z.string().min(1, "Ad soyad gerekli"),
+  sira_no: z.preprocess((val) => Number(val), z.number().min(1).default(999)),
+  ad_soyad: z.string().min(1, "Ad Soyad gerekli"),
   unvan: z.string().optional(),
   kurum: z.string().optional(),
   telefon: z.string().optional(),
-  eposta: z.string().email("Geçerli bir e-posta adresi giriniz").optional().or(z.literal("")),
+  eposta: z.string().email().optional().or(z.literal("")),
 });
 
-// GET - Protokol listesi
+// GET - List
 export async function GET(request: NextRequest) {
   try {
     const session = await auth();
@@ -23,68 +21,30 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "20");
     const search = searchParams.get("search") || "";
-    const kurum = searchParams.get("kurum") || "";
 
-    const skip = (page - 1) * limit;
-
-    // Filtreler
     const where: any = {};
-
     if (search) {
       where.OR = [
         { ad_soyad: { contains: search } },
-        { unvan: { contains: search } },
         { kurum: { contains: search } },
-        { telefon: { contains: search } },
-        { eposta: { contains: search } },
+        { unvan: { contains: search } },
       ];
     }
 
-    if (kurum) {
-      where.kurum = kurum;
-    }
-
-    const [protokoller, total] = await Promise.all([
-      prisma.protokol_listesi.findMany({
-        where,
-        orderBy: [
-          { sira_no: "asc" },
-          { ad_soyad: "asc" },
-        ],
-        skip,
-        take: limit,
-      }),
-      prisma.protokol_listesi.count({ where }),
-    ]);
-
-    // Tarihleri formatla
-    const formattedProtokoller = protokoller.map((protokol: any) => ({
-      ...protokol,
-      created_at: protokol.created_at ? dayjs(protokol.created_at).format("YYYY-MM-DD HH:mm:ss") : null,
-    }));
-
-    return NextResponse.json({
-      data: formattedProtokoller,
-      pagination: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
-      },
+    const items = await prisma.protokol_listesi.findMany({
+      where,
+      orderBy: { sira_no: "asc" },
     });
+
+    return NextResponse.json({ data: items });
   } catch (error) {
     console.error("Protokol GET Error:", error);
-    return NextResponse.json(
-      { error: "Protokol listesi getirilemedi" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Liste getirilemedi" }, { status: 500 });
   }
 }
 
-// POST - Yeni protokol
+// POST - Create
 export async function POST(request: NextRequest) {
   try {
     const session = await auth();
@@ -95,32 +55,18 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validated = protokolSchema.parse(body);
 
-    await prisma.protokol_listesi.create({
-      data: {
-        sira_no: validated.sira_no || null,
-        ad_soyad: validated.ad_soyad,
-        unvan: validated.unvan || null,
-        kurum: validated.kurum || null,
-        telefon: validated.telefon || null,
-        eposta: validated.eposta || null,
-      },
+    const item = await prisma.protokol_listesi.create({
+      data: validated,
     });
 
     return NextResponse.json({
-      message: "Protokol kaydı başarıyla eklendi",
+      message: "Protokol üyesi eklendi",
+      data: item,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: "Validasyon hatası", details: error.issues },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Validasyon hatası", details: error.issues }, { status: 400 });
     }
-
-    console.error("Protokol POST Error:", error);
-    return NextResponse.json(
-      { error: "Protokol kaydı eklenemedi" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Kayıt oluşturulamadı" }, { status: 500 });
   }
 }

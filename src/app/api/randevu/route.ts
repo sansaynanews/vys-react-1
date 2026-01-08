@@ -31,6 +31,8 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || "20");
     const search = searchParams.get("search") || "";
     const tarih = searchParams.get("tarih") || "";
+    const startDate = searchParams.get("startDate");
+    const endDate = searchParams.get("endDate");
     const durum = searchParams.get("durum") || "";
 
     const skip = (page - 1) * limit;
@@ -48,6 +50,11 @@ export async function GET(request: NextRequest) {
 
     if (tarih) {
       where.tarih = new Date(tarih);
+    } else if (startDate && endDate) {
+      where.tarih = {
+        gte: new Date(startDate),
+        lte: new Date(endDate),
+      };
     }
 
     if (durum) {

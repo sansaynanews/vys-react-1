@@ -88,14 +88,21 @@ export default function Sidebar({ userRole, userPermissions }: SidebarProps) {
       },
       {
         label: "Protokol Etkinlik",
-        href: "/dashboard/protokol-etkinlik",
+        href: "/dashboard/etkinlik",
         icon: Trophy,
         permission: "protokol-etkinlik",
         color: "text-cyan-500"
       },
       {
+        label: "Protokol Listesi",
+        href: "/dashboard/protokol",
+        icon: Users,
+        permission: "protokol",
+        color: "text-cyan-500"
+      },
+      {
         label: "Resmi Davet",
-        href: "/dashboard/resmi-davet",
+        href: "/dashboard/resmi-davetler",
         icon: Mail,
         permission: "resmi-davet",
         color: "text-cyan-500"
@@ -107,6 +114,13 @@ export default function Sidebar({ userRole, userPermissions }: SidebarProps) {
         href: "/dashboard/arac",
         icon: Car,
         permission: "arac",
+        color: "text-emerald-500"
+      },
+      {
+        label: "Projeler",
+        href: "/dashboard/projeler",
+        icon: CheckSquare,
+        permission: "projeler",
         color: "text-emerald-500"
       },
       {
@@ -148,7 +162,7 @@ export default function Sidebar({ userRole, userPermissions }: SidebarProps) {
       },
       {
         label: "Talimat Takip",
-        href: "/dashboard/talimat",
+        href: "/dashboard/talimatlar",
         icon: CheckSquare,
         permission: "talimat",
         color: "text-purple-500"
@@ -162,7 +176,7 @@ export default function Sidebar({ userRole, userPermissions }: SidebarProps) {
       },
       {
         label: "Konuşma Metni",
-        href: "/dashboard/konusma-metin",
+        href: "/dashboard/konusma-metinleri",
         icon: MessageSquare,
         permission: "konusma-metin",
         color: "text-purple-500"

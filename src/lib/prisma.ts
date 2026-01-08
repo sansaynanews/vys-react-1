@@ -1,12 +1,15 @@
-import { PrismaClient } from '@/generated/prisma/client';
+import { PrismaClient } from '@prisma/client';
 
-declare global {
-    var prisma: PrismaClient | undefined;
-}
+const globalForPrisma = globalThis as unknown as {
+    prisma: PrismaClient | undefined;
+};
 
-// Prisma 7.x - DATABASE_URL environment variable otomatik kullanılır
-export const prisma = global.prisma || new (PrismaClient as any)();
+export const prisma = globalForPrisma.prisma ?? new PrismaClient();
 
 if (process.env.NODE_ENV !== 'production') {
-    global.prisma = prisma;
+    globalForPrisma.prisma = prisma;
 }
+
+
+
+

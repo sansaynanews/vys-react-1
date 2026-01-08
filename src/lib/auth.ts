@@ -1,32 +1,9 @@
 import NextAuth from "next-auth";
-import type { NextAuthConfig } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
+import { authConfig } from "./auth.config";
 
-// Yetki matrisi (mevcut PHP'den)
-export const yetkiHaritasi: Record<string, string[]> = {
-    makam: ["all"],
-    okm: ["all"],
-    protokol: ["all"],
-    idari: [
-        "toplanti",
-        "vip-ziyaret",
-        "envanter",
-        "kurum-amirleri",
-        "ik",
-        "muhtar",
-        "evrak",
-        "talimat",
-        "ziyaretler",
-        "konusma-metin",
-        "rehber",
-    ],
-    metin: ["konusma-metin"],
-    arac: ["arac"],
-    sekreterlik: ["kurum-amirleri", "muhtar", "rehber"],
-    destek: ["envanter"],
-};
-
-export const authConfig: NextAuthConfig = {
+export const { handlers, auth, signIn, signOut } = NextAuth({
+    ...authConfig,
     providers: [
         Credentials({
             name: "Credentials",
@@ -39,81 +16,60 @@ export const authConfig: NextAuthConfig = {
                     throw new Error("Kullanıcı adı ve şifre gerekli");
                 }
 
-                // API'ye istek at (Edge Runtime uyumlu)
-                const response = await fetch(`${process.env.NEXTAUTH_URL}/api/auth/verify`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        username: credentials.username,
-                        password: credentials.password,
-                    }),
-                });
+                try {
+                    console.log("Auth attempt for:", credentials.username);
 
-                if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.message || "Kimlik doğrulama başarısız");
+                    // Node.js specific imports (Safe here because this file is not used in middleware)
+                    const { default: pool } = await import("./db");
+                    const bcrypt = (await import("bcryptjs")).default;
+                    const crypto = await import("crypto");
+
+                    // 1. Find user
+                    const [rows] = await pool.execute(
+                        'SELECT * FROM kullanicilar WHERE kadi = ? LIMIT 1',
+                        [credentials.username]
+                    );
+
+                    const users = rows as any[];
+                    if (!users || users.length === 0) {
+                        throw new Error("Kullanıcı bulunamadı");
+                    }
+
+                    const user = users[0];
+                    let isValid = false;
+
+                    // 2. Password Check (MD5 Legacy fallback + bcrypt)
+                    const md5Hash = crypto.createHash("md5").update(credentials.password as string).digest("hex");
+
+                    if (user.sifre === md5Hash) {
+                        isValid = true;
+                    } else {
+                        try {
+                            // Compare with bcrypt
+                            isValid = await bcrypt.compare(credentials.password as string, user.sifre);
+                        } catch (e) {
+                            isValid = false;
+                        }
+                    }
+
+                    if (!isValid) {
+                        throw new Error("Şifre hatalı");
+                    }
+
+                    // 3. Return user object
+                    return {
+                        id: user.id.toString(),
+                        name: user.kadi.toUpperCase(),
+                        username: user.kadi,
+                        role: user.yetki,
+                        customPermissions: user.ozel_yetkiler,
+                    };
+
+                } catch (error: any) {
+                    console.error("Authorize error:", error.message);
+                    throw new Error(error.message || "Giriş başarısız");
                 }
-
-                const user = await response.json();
-                return user;
             },
         }),
     ],
-    callbacks: {
-        async jwt({ token, user }) {
-            if (user) {
-                token.id = user.id as string;
-                token.username = (user as any).username;
-                token.role = (user as any).role;
-                token.customPermissions = (user as any).customPermissions;
-            }
-            return token;
-        },
-        async session({ session, token }) {
-            if (session.user) {
-                session.user.id = token.id as string;
-                session.user.username = token.username as string;
-                session.user.role = token.role as string;
-                session.user.customPermissions = token.customPermissions as string | null;
-            }
-            return session;
-        },
-        authorized({ auth, request: { nextUrl } }) {
-            const isLoggedIn = !!auth?.user;
-            const path = nextUrl.pathname;
-
-            // Public rotalar
-            if (path === "/login" || path === "/logout") {
-                if (isLoggedIn && path === "/login") {
-                    return Response.redirect(new URL("/dashboard", nextUrl));
-                }
-                return true;
-            }
-
-            // Dashboard rotaları için auth kontrolü
-            if (path.startsWith("/dashboard")) {
-                return isLoggedIn;
-            }
-
-            // Root'a gelince yönlendir
-            if (path === "/") {
-                if (isLoggedIn) {
-                    return Response.redirect(new URL("/dashboard", nextUrl));
-                }
-                return Response.redirect(new URL("/login", nextUrl));
-            }
-
-            return true;
-        },
-    },
-    pages: {
-        signIn: "/login",
-        error: "/login",
-    },
-    session: {
-        strategy: "jwt",
-        maxAge: 30 * 60, // 30 dakika (mevcut PHP ile aynı)
-    },
-};
-
-export const { handlers, auth, signIn, signOut } = NextAuth(authConfig);
+});

@@ -4,23 +4,22 @@ import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import dayjs from "dayjs";
 
-// Validation schema
-const sehitGaziBilgiSchema = z.object({
-  tur: z.string().optional(),
-  ad_soyad: z.string().optional(),
+const bilgiSchema = z.object({
+  tur: z.string().optional(), // Şehit / Gazi
+  ad_soyad: z.string().min(1, "Ad Soyad gerekli"),
   kurum: z.string().optional(),
   medeni: z.string().optional(),
   es_ad: z.string().optional(),
   anne_ad: z.string().optional(),
   baba_ad: z.string().optional(),
-  cocuk_sayisi: z.number().optional(),
+  cocuk_sayisi: z.any().optional(), // Can be string or int from form
   cocuk_adlari: z.string().optional(),
   olay_yeri: z.string().optional(),
   olay_tarih: z.string().optional(),
   foto: z.string().optional(),
 });
 
-// GET - Şehit/Gazi bilgi listesi
+// GET - List
 export async function GET(request: NextRequest) {
   try {
     const session = await auth();
@@ -29,66 +28,39 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "20");
     const search = searchParams.get("search") || "";
-    const tur = searchParams.get("tur") || "";
+    const type = searchParams.get("type") || "";
 
-    const skip = (page - 1) * limit;
-
-    // Filtreler
     const where: any = {};
-
     if (search) {
       where.OR = [
         { ad_soyad: { contains: search } },
-        { kurum: { contains: search } },
-        { olay_yeri: { contains: search } },
+        { es_ad: { contains: search } },
+        { cocuk_adlari: { contains: search } },
       ];
     }
-
-    if (tur) {
-      where.tur = tur;
+    if (type && type !== "Tümü") {
+      where.tur = type;
     }
 
-    const [kayitlar, total] = await Promise.all([
-      prisma.sehit_gazi_bilgi.findMany({
-        where,
-        orderBy: [
-          { ad_soyad: "asc" },
-        ],
-        skip,
-        take: limit,
-      }),
-      prisma.sehit_gazi_bilgi.count({ where }),
-    ]);
-
-    // Tarihleri formatla
-    const formattedKayitlar = kayitlar.map((kayit: any) => ({
-      ...kayit,
-      olay_tarih: kayit.olay_tarih ? dayjs(kayit.olay_tarih).format("YYYY-MM-DD") : null,
-      created_at: kayit.created_at ? dayjs(kayit.created_at).format("YYYY-MM-DD HH:mm:ss") : null,
-    }));
+    const items = await prisma.sehit_gazi_bilgi.findMany({
+      where,
+      orderBy: { ad_soyad: "asc" },
+    });
 
     return NextResponse.json({
-      data: formattedKayitlar,
-      pagination: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
-      },
+      data: items.map(item => ({
+        ...item,
+        olay_tarih: item.olay_tarih ? dayjs(item.olay_tarih).format("YYYY-MM-DD") : null,
+      }))
     });
   } catch (error) {
-    console.error("Sehit Gazi Bilgi GET Error:", error);
-    return NextResponse.json(
-      { error: "Şehit/Gazi bilgileri getirilemedi" },
-      { status: 500 }
-    );
+    console.error("Bilgi Bankası API Error:", error);
+    return NextResponse.json({ error: "Liste getirilemedi" }, { status: 500 });
   }
 }
 
-// POST - Yeni şehit/gazi bilgi
+// POST - Create
 export async function POST(request: NextRequest) {
   try {
     const session = await auth();
@@ -97,40 +69,22 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const validated = sehitGaziBilgiSchema.parse(body);
+    const validated = bilgiSchema.parse(body);
 
-    await prisma.sehit_gazi_bilgi.create({
-      data: {
-        tur: validated.tur || null,
-        ad_soyad: validated.ad_soyad || null,
-        kurum: validated.kurum || null,
-        medeni: validated.medeni || null,
-        es_ad: validated.es_ad || null,
-        anne_ad: validated.anne_ad || null,
-        baba_ad: validated.baba_ad || null,
-        cocuk_sayisi: validated.cocuk_sayisi || null,
-        cocuk_adlari: validated.cocuk_adlari || null,
-        olay_yeri: validated.olay_yeri || null,
-        olay_tarih: validated.olay_tarih ? new Date(validated.olay_tarih) : null,
-        foto: validated.foto || null,
-      },
-    });
+    const data: any = { ...validated };
+    if (data.olay_tarih) data.olay_tarih = new Date(data.olay_tarih);
+    if (data.cocuk_sayisi) data.cocuk_sayisi = parseInt(data.cocuk_sayisi);
+
+    const item = await prisma.sehit_gazi_bilgi.create({ data });
 
     return NextResponse.json({
-      message: "Şehit/Gazi bilgisi başarıyla eklendi",
+      message: "Kayıt oluşturuldu",
+      data: item,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: "Validasyon hatası", details: error.issues },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Validasyon hatası", details: error.issues }, { status: 400 });
     }
-
-    console.error("Sehit Gazi Bilgi POST Error:", error);
-    return NextResponse.json(
-      { error: "Şehit/Gazi bilgisi eklenemedi" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Kayıt oluşturulamadı" }, { status: 500 });
   }
 }

@@ -1,10 +1,11 @@
-export { auth as middleware } from "@/lib/auth";
+import NextAuth from "next-auth";
+import { authConfig } from "@/lib/auth.config";
+
+// Use the auth export for middleware
+export default NextAuth(authConfig).auth;
 
 export const config = {
-    matcher: [
-        "/",
-        "/login",
-        "/logout",
-        "/dashboard/:path*",
-    ],
+    // Match only dashboard routes for protection
+    // Other routes (login, logout, api, static) are public
+    matcher: ["/dashboard/:path*"],
 };

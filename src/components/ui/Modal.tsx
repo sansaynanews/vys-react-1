@@ -41,13 +41,13 @@ export function Modal({ open, onClose, title, children, size = "md" }: { open: b
     >
       <div
         className={cn(
-          "relative bg-white rounded-2xl shadow-2xl w-full mx-4 animate-in zoom-in-95",
+          "relative bg-white rounded-2xl shadow-2xl w-full mx-4 animate-in zoom-in-95 flex flex-col max-h-[85vh]",
           sizes[size]
         )}
         onClick={(e) => e.stopPropagation()}
       >
         {title && (
-          <div className="flex items-center justify-between p-6 border-b border-slate-100">
+          <div className="flex items-center justify-between p-6 border-b border-slate-100 flex-shrink-0">
             <h3 className="text-lg font-bold text-slate-800">{title}</h3>
             <button
               onClick={onClose}
@@ -57,7 +57,7 @@ export function Modal({ open, onClose, title, children, size = "md" }: { open: b
             </button>
           </div>
         )}
-        <div className="p-6">{children}</div>
+        <div className="p-6 overflow-y-auto">{children}</div>
       </div>
     </div>
   );

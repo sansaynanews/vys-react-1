@@ -4,22 +4,20 @@ import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import dayjs from "dayjs";
 
-// Validation schema
 const evrakSchema = z.object({
-  gelen_kurum: z.string().min(1, "Gelen kurum gerekli"),
-  tur: z.string().min(1, "Evrak türü gerekli"),
+  gelen_kurum: z.string().optional(),
+  tur: z.string().optional(),
   konu: z.string().min(1, "Konu gerekli"),
   notlar: z.string().optional(),
-  evrak_tarih: z.string().optional(),
+  evrak_tarih: z.string().optional(), // YYYY-MM-DD
   evrak_sayi: z.string().optional(),
-  gelis_tarih: z.string().optional(),
+  gelis_tarih: z.string().optional(), // YYYY-MM-DD
   teslim_alan: z.string().optional(),
-  cikis_tarihi: z.string().optional().nullable(),
-  sunus_tarihi: z.string().optional().nullable(),
-  saat: z.string().optional(),
+  sunus_tarihi: z.string().optional().or(z.literal("")),
+  cikis_tarihi: z.string().optional().or(z.literal("")),
 });
 
-// GET - Evrak listesi
+// GET - List
 export async function GET(request: NextRequest) {
   try {
     const session = await auth();
@@ -28,78 +26,51 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "20");
     const search = searchParams.get("search") || "";
-    const tur = searchParams.get("tur") || "";
-    const durum = searchParams.get("durum") || "";
+    const startDate = searchParams.get("startDate");
+    const endDate = searchParams.get("endDate");
 
-    const skip = (page - 1) * limit;
-
-    // Filtreler
     const where: any = {};
 
     if (search) {
       where.OR = [
-        { gelen_kurum: { contains: search } },
         { konu: { contains: search } },
+        { gelen_kurum: { contains: search } },
         { evrak_sayi: { contains: search } },
-        { teslim_alan: { contains: search } },
       ];
     }
 
-    if (tur) {
-      where.tur = tur;
+    if (startDate && endDate) {
+      where.gelis_tarih = {
+        gte: new Date(startDate),
+        lte: new Date(endDate),
+      };
     }
 
-    // Durum filtreleme (bekliyor, tamamlandı)
-    if (durum === "bekliyor") {
-      where.sunus_tarihi = null;
-    } else if (durum === "tamamlandi") {
-      where.sunus_tarihi = { not: null };
-    }
-
-    const [evraklar, total] = await Promise.all([
-      prisma.evraklar.findMany({
-        where,
-        orderBy: {
-          created_at: "desc",
-        },
-        skip,
-        take: limit,
-      }),
-      prisma.evraklar.count({ where }),
-    ]);
-
-    // Tarihleri formatla
-    const formattedEvraklar = evraklar.map((evrak: any) => ({
-      ...evrak,
-      evrak_tarih: evrak.evrak_tarih ? dayjs(evrak.evrak_tarih).format("YYYY-MM-DD") : null,
-      gelis_tarih: evrak.gelis_tarih ? dayjs(evrak.gelis_tarih).format("YYYY-MM-DD") : null,
-      cikis_tarihi: evrak.cikis_tarihi ? dayjs(evrak.cikis_tarihi).format("YYYY-MM-DD") : null,
-      sunus_tarihi: evrak.sunus_tarihi ? dayjs(evrak.sunus_tarihi).format("YYYY-MM-DD") : null,
-      created_at: evrak.created_at ? dayjs(evrak.created_at).format("YYYY-MM-DD HH:mm:ss") : null,
-    }));
+    const evraklar = await prisma.evraklar.findMany({
+      where,
+      orderBy: { gelis_tarih: "desc" },
+    });
 
     return NextResponse.json({
-      data: formattedEvraklar,
-      pagination: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
-      },
+      data: evraklar.map(e => ({
+        ...e,
+        gelis_tarih: e.gelis_tarih ? dayjs(e.gelis_tarih).format("YYYY-MM-DD") : null,
+        evrak_tarih: e.evrak_tarih ? dayjs(e.evrak_tarih).format("YYYY-MM-DD") : null,
+        sunus_tarihi: e.sunus_tarihi ? dayjs(e.sunus_tarihi).format("YYYY-MM-DD") : null,
+        cikis_tarihi: e.cikis_tarihi ? dayjs(e.cikis_tarihi).format("YYYY-MM-DD") : null,
+      }))
     });
   } catch (error) {
     console.error("Evrak GET Error:", error);
     return NextResponse.json(
-      { error: "Evraklar getirilemedi" },
+      { error: "Liste getirilemedi" },
       { status: 500 }
     );
   }
 }
 
-// POST - Yeni evrak
+// POST - Create
 export async function POST(request: NextRequest) {
   try {
     const session = await auth();
@@ -110,24 +81,20 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validated = evrakSchema.parse(body);
 
-    await prisma.evraklar.create({
-      data: {
-        gelen_kurum: validated.gelen_kurum,
-        tur: validated.tur,
-        konu: validated.konu,
-        notlar: validated.notlar || null,
-        evrak_tarih: validated.evrak_tarih ? new Date(validated.evrak_tarih) : null,
-        evrak_sayi: validated.evrak_sayi || null,
-        gelis_tarih: validated.gelis_tarih ? new Date(validated.gelis_tarih) : null,
-        teslim_alan: validated.teslim_alan || null,
-        cikis_tarihi: validated.cikis_tarihi ? new Date(validated.cikis_tarihi) : null,
-        sunus_tarihi: validated.sunus_tarihi ? new Date(validated.sunus_tarihi) : null,
-        saat: validated.saat ? new Date(`1970-01-01T${validated.saat}`) : null,
-      },
+    const data: any = { ...validated };
+
+    if (data.evrak_tarih) data.evrak_tarih = new Date(data.evrak_tarih);
+    if (data.gelis_tarih) data.gelis_tarih = new Date(data.gelis_tarih);
+    if (data.sunus_tarihi) data.sunus_tarihi = new Date(data.sunus_tarihi);
+    if (data.cikis_tarihi) data.cikis_tarihi = new Date(data.cikis_tarihi);
+
+    const evrak = await prisma.evraklar.create({
+      data,
     });
 
     return NextResponse.json({
-      message: "Evrak başarıyla eklendi",
+      message: "Evrak kaydedildi",
+      data: evrak,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -136,10 +103,9 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-
     console.error("Evrak POST Error:", error);
     return NextResponse.json(
-      { error: "Evrak eklenemedi" },
+      { error: "Kayıt oluşturulamadı" },
       { status: 500 }
     );
   }
