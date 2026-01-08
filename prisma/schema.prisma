@@ -1,0 +1,467 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+model amir_izinleri {
+  id          Int       @id @default(autoincrement())
+  kurum_adi   String?   @db.VarChar(150)
+  amir_ad     String?   @db.VarChar(150)
+  baslangic   DateTime? @db.Date
+  bitis       DateTime? @db.Date
+  vekil_ad    String?   @db.VarChar(150)
+  vekil_unvan String?   @db.VarChar(100)
+  vekil_tel   String?   @db.VarChar(20)
+  created_at  DateTime  @default(now()) @db.Timestamp(0)
+  izin_turu   String?   @default("Yıllık İzin") @db.VarChar(30)
+}
+
+model arac_gecmis {
+  id           Int       @id @default(autoincrement())
+  arac_id      Int
+  islem_turu   String?   @db.VarChar(50)
+  tarih        DateTime? @db.Date
+  km           Int?
+  aciklama     String?   @db.VarChar(255)
+  islem_tarihi DateTime  @default(now()) @db.Timestamp(0)
+  kullanici    String?   @default("Sistem") @db.VarChar(100)
+}
+
+model araclar {
+  id                    Int       @id @default(autoincrement())
+  plaka                 String    @db.VarChar(20)
+  marka                 String    @db.VarChar(50)
+  model                 String?   @db.VarChar(50)
+  model_yili            Int?
+  ruhsat_seri           String?   @db.VarChar(50)
+  lastik_ebat           String?   @db.VarChar(50)
+  renk                  String?   @db.VarChar(30)
+  tur                   String?   @db.VarChar(30)
+  yakit                 String?   @db.VarChar(30)
+  kurum                 String?   @db.VarChar(100)
+  bakim_son             DateTime? @db.Date
+  bakim_sonraki         String?   @db.VarChar(20)
+  sigorta_bas           DateTime? @db.Date
+  sigorta_bit           DateTime? @db.Date
+  kasko_bas             DateTime? @db.Date
+  kasko_bit             DateTime? @db.Date
+  muayene_tarih         DateTime? @db.Date
+  muayene_bit           DateTime? @db.Date
+  created_at            DateTime  @default(now()) @db.Timestamp(0)
+  bakim_son_km          Int?
+  bakim_sonraki_km      Int?
+  lastik_degisim_tarih  DateTime? @db.Date
+  lastik_yili           String?   @db.VarChar(20)
+  periyodik_bakim_tarih DateTime? @db.Date
+  periyodik_bakim_km    Int?
+  agir_bakim_tarih      DateTime? @db.Date
+  agir_bakim_km         Int?
+  diger_aciklama        String?   @db.Text
+  diger_tarih           DateTime? @db.Date
+  diger_km              Int?
+}
+
+model etkinlikler {
+  id             Int       @id @default(autoincrement())
+  adi            String?   @db.VarChar(255)
+  kurum          String?   @db.VarChar(150)
+  tarih          DateTime? @db.Date
+  orijinal_tarih DateTime? @db.Date
+  saat           String?   @db.VarChar(10)
+  yer            String?   @db.VarChar(255)
+  detay          String?   @db.Text
+  created_at     DateTime  @default(now()) @db.Timestamp(0)
+  tekrar_yillik  Boolean?  @default(false)
+}
+
+model evraklar {
+  id           Int       @id @default(autoincrement())
+  gelen_kurum  String?   @db.VarChar(255)
+  tur          String?   @db.VarChar(100)
+  konu         String?   @db.Text
+  notlar       String?   @db.Text
+  evrak_tarih  DateTime? @db.Date
+  evrak_sayi   String?   @db.VarChar(100)
+  gelis_tarih  DateTime? @db.Date
+  teslim_alan  String?   @db.VarChar(255)
+  cikis_tarihi DateTime? @db.Date
+  sunus_tarihi DateTime? @db.Date
+  created_at   DateTime  @default(now()) @db.Timestamp(0)
+  saat         DateTime? @default(dbgenerated("('09:00:00')")) @db.Time(0)
+}
+
+model gunluk_program_manuel {
+  id         Int      @id @default(autoincrement())
+  tarih      DateTime @db.Date
+  saat       String   @db.VarChar(10)
+  tur        String?  @db.VarChar(50)
+  aciklama   String?  @db.Text
+  created_at DateTime @default(now()) @db.Timestamp(0)
+}
+
+model konusma_metinleri {
+  id         Int       @id @default(autoincrement())
+  kategori   String    @db.VarChar(50)
+  baslik     String    @db.VarChar(255)
+  icerik     String    @db.Text
+  created_at DateTime  @default(now()) @db.Timestamp(0)
+  tarih      DateTime? @db.Date
+  saat       DateTime? @default(dbgenerated("('10:00:00')")) @db.Time(0)
+}
+
+model kullanicilar {
+  id               Int       @id @default(autoincrement())
+  kadi             String    @unique(map: "kadi") @db.VarChar(50)
+  sifre            String    @db.VarChar(255)
+  yetki            String    @default("user") @db.VarChar(50)
+  olusturma_tarihi DateTime? @default(now()) @db.DateTime(0)
+  ozel_yetkiler    String?   @db.Text
+}
+
+model kurum_amirleri {
+  id         Int      @id @default(autoincrement())
+  kurum_adi  String   @db.VarChar(150)
+  ad_soyad   String   @db.VarChar(150)
+  unvan      String?  @db.VarChar(100)
+  email      String?  @db.VarChar(100)
+  gsm        String?  @db.VarChar(20)
+  sabit_tel  String?  @db.VarChar(20)
+  created_at DateTime @default(now()) @db.Timestamp(0)
+  foto       String?  @db.VarChar(255)
+}
+
+model muhtarlar {
+  id          Int      @id @default(autoincrement())
+  ilce        String?  @db.VarChar(50)
+  mahalle_koy String   @db.VarChar(100)
+  ad_soyad    String   @db.VarChar(100)
+  gsm         String   @db.VarChar(20)
+  sabit_tel   String   @db.VarChar(20)
+  email       String?  @db.VarChar(100)
+  created_at  DateTime @default(now()) @db.Timestamp(0)
+  foto        String?  @db.VarChar(255)
+}
+
+model personel_cv {
+  id             Int       @id @default(autoincrement())
+  personel_id    Int
+  dosya_adi      String    @db.VarChar(255)
+  dosya_yolu     String    @db.VarChar(255)
+  dosya_tipi     String?   @db.VarChar(100)
+  dosya_boyut    Int?
+  yukleme_tarihi DateTime? @default(now()) @db.DateTime(0)
+
+  @@index([personel_id], map: "idx_personel_id")
+}
+
+model personel_hareketleri {
+  id               Int       @id @default(autoincrement())
+  personel_id      Int
+  islem_turu       String?   @db.VarChar(100)
+  baslangic_tarihi DateTime? @db.Date
+  bitis_tarihi     DateTime? @db.Date
+  mesai_tarihi     DateTime? @db.Date
+  mesai_saati      String?   @db.VarChar(50)
+  aciklama         String?   @db.Text
+  created_at       DateTime  @default(now()) @db.Timestamp(0)
+}
+
+model personel_izinleri {
+  id             Int       @id @default(autoincrement())
+  personel_id    Int
+  personel_ad    String?   @db.VarChar(150)
+  personel_birim String?   @db.VarChar(50)
+  turu           String?   @db.VarChar(50)
+  baslangic      DateTime? @db.Date
+  bitis          DateTime? @db.Date
+  mesai_tarihi   DateTime? @db.Date
+  mesai_saati    String?   @db.VarChar(50)
+  aciklama       String?   @db.Text
+  created_at     DateTime  @default(now()) @db.Timestamp(0)
+}
+
+model personeller {
+  id              Int       @id @default(autoincrement())
+  birim           String    @db.VarChar(50)
+  ad_soyad        String    @db.VarChar(150)
+  unvan           String?   @db.VarChar(100)
+  telefon         String?   @db.VarChar(20)
+  eposta          String?   @db.VarChar(100)
+  acil_kisi       String?   @db.VarChar(150)
+  acil_tel        String?   @db.VarChar(20)
+  kan_grubu       String?   @db.VarChar(10)
+  baslama_tarihi  DateTime? @db.Date
+  yabanci_dil     String?   @db.VarChar(255)
+  gorev_tanimi    String?   @db.Text
+  silindi         Boolean?  @default(false)
+  silinme_tarihi  DateTime? @db.DateTime(0)
+  created_at      DateTime  @default(now()) @db.Timestamp(0)
+  aciklama        String?   @db.Text
+  toplam_izin     Int?      @default(14)
+  kullanilan_izin Int?      @default(0)
+  mesai_saati     Decimal?  @default(0.00) @db.Decimal(10, 2)
+  rapor_gun       Int?      @default(0)
+  foto            String?   @db.VarChar(255)
+}
+
+model projeler {
+  id         Int       @id @default(autoincrement())
+  konu       String    @db.VarChar(255)
+  sahibi     String    @db.VarChar(100)
+  kurum      String?   @db.VarChar(150)
+  iletisim   String?   @db.VarChar(20)
+  baslangic  DateTime? @db.Date
+  bitis      DateTime? @db.Date
+  durum      String?   @default("Beklemede") @db.VarChar(50)
+  hedefler   String?   @db.Text
+  created_at DateTime  @default(now()) @db.Timestamp(0)
+}
+
+model protokol_listesi {
+  id         Int      @id @default(autoincrement())
+  sira_no    Int?
+  ad_soyad   String?  @db.VarChar(150)
+  unvan      String?  @db.VarChar(150)
+  kurum      String?  @db.VarChar(150)
+  telefon    String?  @db.VarChar(20)
+  eposta     String?  @db.VarChar(100)
+  created_at DateTime @default(now()) @db.Timestamp(0)
+}
+
+model randevular {
+  id           Int                    @id @default(autoincrement())
+  tipi         String                 @db.VarChar(150)
+  ad_soyad     String?                @db.VarChar(150)
+  unvan        String?                @db.VarChar(150)
+  kurum        String?                @db.VarChar(150)
+  iletisim     String?                @db.VarChar(20)
+  tarih        DateTime?              @db.Date
+  saat         String?                @db.VarChar(10)
+  katilimci    Int?                   @default(1)
+  amac         String?                @db.Text
+  notlar       String?                @db.Text
+  created_at   DateTime               @default(now()) @db.Timestamp(0)
+  durum        String?                @default("Bekliyor") @db.VarChar(50)
+  giris_saati  DateTime?              @db.Time(0)
+  cikis_saati  DateTime?              @db.Time(0)
+  giris_tarihi DateTime?              @db.Date
+  kayit_tipi   randevular_kayit_tipi? @default(Randevu)
+
+  @@index([ad_soyad], map: "idx_ad_soyad")
+  @@index([durum], map: "idx_durum")
+  @@index([durum], map: "idx_randevular_durum")
+  @@index([giris_tarihi], map: "idx_randevular_giris_tarihi")
+  @@index([tarih], map: "idx_randevular_tarih")
+  @@index([tarih, giris_tarihi], map: "idx_randevular_tarihler")
+  @@index([tarih], map: "idx_tarih")
+}
+
+model rehber {
+  id         Int      @id @default(autoincrement())
+  ad_soyad   String   @db.VarChar(100)
+  unvan      String?  @db.VarChar(100)
+  kurum      String?  @db.VarChar(150)
+  telefon    String   @db.VarChar(20)
+  telefon2   String?  @db.VarChar(20)
+  dahili     String?  @db.VarChar(20)
+  email      String?  @db.VarChar(100)
+  adres      String?  @db.Text
+  aciklama   String?  @db.Text
+  created_at DateTime @default(now()) @db.Timestamp(0)
+}
+
+model resmi_davetler {
+  id             Int       @id @default(autoincrement())
+  tur            String?   @db.VarChar(50)
+  sahip          String?   @db.VarChar(150)
+  tarih          DateTime? @db.Date
+  saat           String?   @db.VarChar(10)
+  yer            String?   @db.VarChar(255)
+  aciklama       String?   @db.Text
+  getiren        String?   @db.VarChar(150)
+  gelis_sekli    String?   @db.VarChar(50)
+  iletisim       String?   @db.VarChar(20)
+  gelis_tarih    DateTime? @db.Date
+  gelis_saat     String?   @db.VarChar(10)
+  katilim_durumu String?   @default("Belirsiz") @db.VarChar(50)
+  created_at     DateTime  @default(now()) @db.Timestamp(0)
+  gelis_tarihi   DateTime? @db.Date
+  gelis_saati    DateTime? @db.Time(0)
+}
+
+model salon_rezervasyon_dokumanlari {
+  id             Int      @id @default(autoincrement())
+  rezervasyon_id Int
+  dosya_adi      String   @db.VarChar(255)
+  dosya_yolu     String   @db.VarChar(500)
+  dosya_tipi     String?  @db.VarChar(100)
+  dosya_boyut    Int?
+  yukleme_tarihi DateTime @default(now()) @db.Timestamp(0)
+
+  @@index([rezervasyon_id], map: "rezervasyon_id")
+}
+
+model salon_rezervasyonlari {
+  id          Int       @id @default(autoincrement())
+  salon_id    Int
+  salon_ad    String?   @db.VarChar(150)
+  baslik      String?   @db.VarChar(255)
+  tur         String?   @db.VarChar(100)
+  rez_sahibi  String?   @db.VarChar(150)
+  departman   String?   @db.VarChar(150)
+  iletisim    String?   @db.VarChar(20)
+  tarih       DateTime? @db.Date
+  bas_saat    String?   @db.VarChar(10)
+  bit_saat    String?   @db.VarChar(10)
+  tekrar_tipi String?   @default("yok") @db.VarChar(20)
+  created_at  DateTime  @default(now()) @db.Timestamp(0)
+  kararlar    String?   @db.Text
+}
+
+model sehit_gazi_bilgi {
+  id           Int       @id @default(autoincrement())
+  tur          String?   @db.VarChar(50)
+  ad_soyad     String?   @db.VarChar(150)
+  kurum        String?   @db.VarChar(255)
+  medeni       String?   @db.VarChar(50)
+  es_ad        String?   @db.VarChar(150)
+  anne_ad      String?   @db.VarChar(150)
+  baba_ad      String?   @db.VarChar(150)
+  cocuk_sayisi Int?
+  cocuk_adlari String?   @db.Text
+  olay_yeri    String?   @db.VarChar(255)
+  olay_tarih   DateTime? @db.Date
+  created_at   DateTime  @default(now()) @db.Timestamp(0)
+  foto         String?   @db.VarChar(255)
+}
+
+model stok_hareketleri {
+  id         Int       @id @default(autoincrement())
+  tur        String    @db.VarChar(20)
+  adi        String    @db.VarChar(100)
+  cesit      String    @db.VarChar(100)
+  alinan     String?   @db.VarChar(150)
+  verilen    String?   @db.VarChar(150)
+  miktar     Int
+  kalan_stok Int
+  tarih      String    @db.VarChar(50)
+  created_at DateTime  @default(now()) @db.Timestamp(0)
+  personel   String?   @db.VarChar(100)
+  stok_turu  String?   @default("genel") @db.VarChar(20)
+  saat       DateTime? @default(dbgenerated("('09:00:00')")) @db.Time(0)
+}
+
+model stok_kartlari {
+  id       Int     @id @default(autoincrement())
+  adi      String  @db.VarChar(100)
+  cesit    String  @db.VarChar(100)
+  miktar   Int?    @default(0)
+  kategori String? @default("Genel") @db.VarChar(50)
+  tur      String? @default("genel") @db.VarChar(20)
+}
+
+model talimatlar {
+  id                Int       @id @default(autoincrement())
+  konu              String    @db.VarChar(255)
+  verilen_kisi      String    @db.VarChar(150)
+  kurum             String?   @db.VarChar(150)
+  iletisim          String?   @db.VarChar(20)
+  tarih             DateTime? @db.Date
+  durum             String?   @default("Beklemede") @db.VarChar(50)
+  icerik            String?   @db.Text
+  created_at        DateTime  @default(now()) @db.Timestamp(0)
+  onem_derecesi     String?   @default("Normal") @db.VarChar(50)
+  saat              DateTime? @default(dbgenerated("('10:00:00')")) @db.Time(0)
+  tamamlanma_tarihi DateTime? @db.Date
+  tamamlayan_kisi   String?   @db.VarChar(255)
+}
+
+model toplanti_salonlari {
+  id         Int      @id @default(autoincrement())
+  ad         String   @db.VarChar(150)
+  kapasite   Int?
+  konum      String?  @db.VarChar(150)
+  ekipman    String?  @db.Text
+  notlar     String?  @db.Text
+  created_at DateTime @default(now()) @db.Timestamp(0)
+}
+
+model ust_duzey_ziyaret {
+  id             Int       @id @default(autoincrement())
+  protokol_turu  String?   @db.VarChar(100)
+  ad_soyad       String?   @db.VarChar(150)
+  gelis_tarihi   DateTime? @db.Date
+  gelis_saati    String?   @db.VarChar(10)
+  karsilama_yeri String?   @db.VarChar(255)
+  konaklama_yeri String?   @db.VarChar(255)
+  notlar         String?   @db.Text
+  created_at     DateTime  @default(now()) @db.Timestamp(0)
+}
+
+model ziyaret_kamu {
+  id         Int       @id @default(autoincrement())
+  kurum      String?   @db.VarChar(255)
+  yer        String?   @db.VarChar(255)
+  tarih      DateTime? @db.Date
+  saat       String?   @db.VarChar(10)
+  talepler   String?   @db.Text
+  created_at DateTime  @default(now()) @db.Timestamp(0)
+}
+
+model ziyaret_sehit_gazi {
+  id            Int       @id @default(autoincrement())
+  tur           String?   @db.VarChar(50)
+  ad_soyad      String?   @db.VarChar(150)
+  kurum         String?   @db.VarChar(255)
+  medeni        String?   @db.VarChar(50)
+  es_ad         String?   @db.VarChar(150)
+  anne_ad       String?   @db.VarChar(150)
+  baba_ad       String?   @db.VarChar(150)
+  cocuk_sayisi  Int?
+  cocuk_adlari  String?   @db.Text
+  olay_yeri     String?   @db.VarChar(255)
+  olay_tarih    DateTime? @db.Date
+  ziyaret_tarih DateTime? @db.Date
+  ziyaret_saat  String?   @db.VarChar(10)
+  talepler      String?   @db.Text
+  created_at    DateTime  @default(now()) @db.Timestamp(0)
+  aile_ferdi    String?   @db.VarChar(50)
+  saat          DateTime? @default(dbgenerated("('14:00:00')")) @db.Time(0)
+}
+
+model ziyaretci_kayitlari {
+  id            Int      @id @default(autoincrement())
+  ad_soyad      String   @db.VarChar(150)
+  unvan         String?  @db.VarChar(100)
+  kurum         String?  @db.VarChar(150)
+  iletisim      String?  @db.VarChar(20)
+  giris_tarihi  DateTime @db.Date
+  giris_saati   String   @db.VarChar(10)
+  cikis_saati   String?  @db.VarChar(10)
+  kisi_sayisi   Int?     @default(1)
+  diger_kisiler String?  @db.Text
+  created_at    DateTime @default(now()) @db.Timestamp(0)
+}
+
+model ziyaretci_log {
+  id            Int      @id @default(autoincrement())
+  ad_soyad      String   @db.VarChar(100)
+  unvan         String?  @db.VarChar(100)
+  kurum         String?  @db.VarChar(150)
+  iletisim      String?  @db.VarChar(20)
+  giris_tarihi  DateTime @db.Date
+  giris_saati   String   @db.VarChar(5)
+  cikis_saati   String?  @db.VarChar(5)
+  kisi_sayisi   Int?     @default(1)
+  diger_kisiler String?  @db.Text
+  created_at    DateTime @default(now()) @db.Timestamp(0)
+}
+
+enum randevular_kayit_tipi {
+  Randevu
+  Randevusuz
+}
