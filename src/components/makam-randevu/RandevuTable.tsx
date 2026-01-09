@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import dayjs from "dayjs";
 import "dayjs/locale/tr";
 import { Edit2, Trash2, Search, Filter } from "lucide-react";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import RandevuDialog from "./RandevuDialog";
 
 dayjs.locale("tr");
@@ -26,6 +27,8 @@ export default function RandevuTable() {
     const [editItem, setEditItem] = useState<Randevu | null>(null);
     const [search, setSearch] = useState("");
     const [statusFilter, setStatusFilter] = useState("");
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [deleteId, setDeleteId] = useState<number | null>(null);
 
     const fetchData = async () => {
         setLoading(true);
@@ -48,18 +51,23 @@ export default function RandevuTable() {
         fetchData();
     }, [search, statusFilter]);
 
-    const handleDelete = async (id: number) => {
-        if (!confirm("Bu randevuyu silmek istediğinize emin misiniz?")) return;
+    const openDeleteDialog = (id: number) => {
+        setDeleteId(id);
+        setDeleteDialogOpen(true);
+    };
 
+    const handleDeleteConfirm = async () => {
+        if (!deleteId) return;
         try {
-            const res = await fetch(`/api/randevu/${id}`, { method: "DELETE" });
+            const res = await fetch(`/api/randevu/${deleteId}`, { method: "DELETE" });
             if (res.ok) {
                 fetchData();
-            } else {
-                alert("Silme işlemi başarısız oldu");
             }
         } catch (error) {
             console.error("Silme hatası:", error);
+        } finally {
+            setDeleteDialogOpen(false);
+            setDeleteId(null);
         }
     };
 
@@ -163,7 +171,7 @@ export default function RandevuTable() {
                                                 <Edit2 className="w-4 h-4" />
                                             </button>
                                             <button
-                                                onClick={() => handleDelete(item.id)}
+                                                onClick={() => openDeleteDialog(item.id)}
                                                 className="p-1.5 text-red-600 hover:bg-red-50 rounded transition"
                                                 title="Sil"
                                             >
@@ -190,6 +198,20 @@ export default function RandevuTable() {
                     initialData={editItem}
                 />
             )}
+
+            <ConfirmDialog
+                open={deleteDialogOpen}
+                onClose={() => {
+                    setDeleteDialogOpen(false);
+                    setDeleteId(null);
+                }}
+                onConfirm={handleDeleteConfirm}
+                title="Randevuyu Sil"
+                message="Bu randevuyu silmek istediğinize emin misiniz? Bu işlem geri alınamaz."
+                confirmText="Evet, Sil"
+                cancelText="Vazgeç"
+                variant="danger"
+            />
         </div>
     );
 }

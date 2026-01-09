@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import dayjs from "dayjs";
 import "dayjs/locale/tr";
 import { Edit2, Trash2, Search, Calendar, Clock, MapPin } from "lucide-react";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import RezervasyonDialog from "./RezervasyonDialog";
 
 dayjs.locale("tr");
@@ -16,7 +17,9 @@ export default function RezervasyonTable() {
     // Filtreler
     const [search, setSearch] = useState("");
     const [salonId, setSalonId] = useState("");
-    const [date, setDate] = useState(dayjs().format("YYYY-MM-DD")); // Varsayılan bugün
+    const [date, setDate] = useState(dayjs().format("YYYY-MM-DD"));
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [deleteId, setDeleteId] = useState<number | null>(null);
 
     const [salonList, setSalonList] = useState<any[]>([]);
 
@@ -47,18 +50,23 @@ export default function RezervasyonTable() {
         fetchData();
     }, [search, salonId, date]);
 
-    const handleDelete = async (id: number) => {
-        if (!confirm("Bu rezervasyonu silmek istediğinize emin misiniz?")) return;
+    const openDeleteDialog = (id: number) => {
+        setDeleteId(id);
+        setDeleteDialogOpen(true);
+    };
 
+    const handleDeleteConfirm = async () => {
+        if (!deleteId) return;
         try {
-            const res = await fetch(`/api/salon-rezervasyon/${id}`, { method: "DELETE" });
+            const res = await fetch(`/api/salon-rezervasyon/${deleteId}`, { method: "DELETE" });
             if (res.ok) {
                 fetchData();
-            } else {
-                alert("Silinemedi");
             }
         } catch (error) {
             console.error(error);
+        } finally {
+            setDeleteDialogOpen(false);
+            setDeleteId(null);
         }
     };
 
@@ -146,7 +154,7 @@ export default function RezervasyonTable() {
                                             <button onClick={() => { setEditItem(item); setIsDialogOpen(true); }} className="text-blue-600 hover:bg-blue-50 p-1 rounded">
                                                 <Edit2 className="w-4 h-4" />
                                             </button>
-                                            <button onClick={() => handleDelete(item.id)} className="text-red-600 hover:bg-red-50 p-1 rounded">
+                                            <button onClick={() => openDeleteDialog(item.id)} className="text-red-600 hover:bg-red-50 p-1 rounded">
                                                 <Trash2 className="w-4 h-4" />
                                             </button>
                                         </div>
@@ -163,6 +171,20 @@ export default function RezervasyonTable() {
                 onOpenChange={setIsDialogOpen}
                 onSuccess={() => { fetchData(); setEditItem(null); }}
                 initialData={editItem}
+            />
+
+            <ConfirmDialog
+                open={deleteDialogOpen}
+                onClose={() => {
+                    setDeleteDialogOpen(false);
+                    setDeleteId(null);
+                }}
+                onConfirm={handleDeleteConfirm}
+                title="Rezervasyonu Sil"
+                message="Bu rezervasyonu silmek istediğinize emin misiniz? Bu işlem geri alınamaz."
+                confirmText="Evet, Sil"
+                cancelText="Vazgeç"
+                variant="danger"
             />
         </div>
     );

@@ -5,7 +5,7 @@ import { Providers } from "./providers";
 import { ToastContainer } from "@/components/ui/ToastContainer";
 
 const inter = Inter({
-  subsets: ["latin"],
+  subsets: ["latin", "latin-ext"],
   variable: "--font-inter",
 });
 
@@ -24,7 +24,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="tr">
-      <body className={`${inter.variable} font-sans antialiased`}>
+      <body className={`${inter.variable} font-sans antialiased overflow-y-scroll`}>
         <Providers>
           {children}
           <ToastContainer />

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Edit2, Trash2, MapPin, Users } from "lucide-react";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import SalonDialog from "./SalonDialog";
 
 export default function SalonTable() {
@@ -9,6 +10,8 @@ export default function SalonTable() {
     const [loading, setLoading] = useState(true);
     const [editItem, setEditItem] = useState<any | null>(null);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [deleteId, setDeleteId] = useState<number | null>(null);
 
     const fetchData = async () => {
         setLoading(true);
@@ -27,12 +30,21 @@ export default function SalonTable() {
         fetchData();
     }, []);
 
-    const handleDelete = async (id: number) => {
-        if (!confirm("Bu salonu silmek istediğinize emin misiniz?")) return;
+    const openDeleteDialog = (id: number) => {
+        setDeleteId(id);
+        setDeleteDialogOpen(true);
+    };
+
+    const handleDeleteConfirm = async () => {
+        if (!deleteId) return;
         try {
-            const res = await fetch(`/api/toplanti-salonu/${id}`, { method: "DELETE" });
+            const res = await fetch(`/api/toplanti-salonu/${deleteId}`, { method: "DELETE" });
             if (res.ok) fetchData();
         } catch (error) { console.error(error); }
+        finally {
+            setDeleteDialogOpen(false);
+            setDeleteId(null);
+        }
     };
 
     return (
@@ -57,7 +69,7 @@ export default function SalonTable() {
                                 <button onClick={() => { setEditItem(salon); setIsDialogOpen(true); }} className="p-1 text-blue-600 hover:bg-blue-50 rounded">
                                     <Edit2 className="w-4 h-4" />
                                 </button>
-                                <button onClick={() => handleDelete(salon.id)} className="p-1 text-red-600 hover:bg-red-50 rounded">
+                                <button onClick={() => openDeleteDialog(salon.id)} className="p-1 text-red-600 hover:bg-red-50 rounded">
                                     <Trash2 className="w-4 h-4" />
                                 </button>
                             </div>
@@ -89,6 +101,20 @@ export default function SalonTable() {
                 onOpenChange={setIsDialogOpen}
                 onSuccess={() => { fetchData(); setEditItem(null); }}
                 initialData={editItem}
+            />
+
+            <ConfirmDialog
+                open={deleteDialogOpen}
+                onClose={() => {
+                    setDeleteDialogOpen(false);
+                    setDeleteId(null);
+                }}
+                onConfirm={handleDeleteConfirm}
+                title="Salonu Sil"
+                message="Bu salonu silmek istediğinize emin misiniz? Bu işlem geri alınamaz."
+                confirmText="Evet, Sil"
+                cancelText="Vazgeç"
+                variant="danger"
             />
         </div>
     );

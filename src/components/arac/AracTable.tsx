@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import dayjs from "dayjs";
 import "dayjs/locale/tr";
 import { Edit2, Trash2, Search, Car, Calendar, AlertTriangle } from "lucide-react";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import AracDialog from "./AracDialog";
 
 dayjs.locale("tr");
@@ -15,6 +16,8 @@ export default function AracTable() {
     const [search, setSearch] = useState("");
     const [kurumFilter, setKurumFilter] = useState("");
     const [isDialogOpen, setIsDialogOpen] = useState(false);
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [deleteId, setDeleteId] = useState<number | null>(null);
 
     const fetchData = async () => {
         setLoading(true);
@@ -37,18 +40,23 @@ export default function AracTable() {
         fetchData();
     }, [search, kurumFilter]);
 
-    const handleDelete = async (id: number) => {
-        if (!confirm("Bu aracı silmek istediğinize emin misiniz?")) return;
+    const openDeleteDialog = (id: number) => {
+        setDeleteId(id);
+        setDeleteDialogOpen(true);
+    };
 
+    const handleDeleteConfirm = async () => {
+        if (!deleteId) return;
         try {
-            const res = await fetch(`/api/arac/${id}`, { method: "DELETE" });
+            const res = await fetch(`/api/arac/${deleteId}`, { method: "DELETE" });
             if (res.ok) {
                 fetchData();
-            } else {
-                alert("Silme işlemi başarısız oldu");
             }
         } catch (error) {
             console.error("Silme hatası:", error);
+        } finally {
+            setDeleteDialogOpen(false);
+            setDeleteId(null);
         }
     };
 
@@ -192,7 +200,7 @@ export default function AracTable() {
                                                     <Edit2 className="w-4 h-4" />
                                                 </button>
                                                 <button
-                                                    onClick={() => handleDelete(item.id)}
+                                                    onClick={() => openDeleteDialog(item.id)}
                                                     className="p-1.5 text-red-600 hover:bg-red-50 rounded transition"
                                                     title="Sil"
                                                 >
@@ -217,6 +225,20 @@ export default function AracTable() {
                     setEditItem(null);
                 }}
                 initialData={editItem}
+            />
+
+            <ConfirmDialog
+                open={deleteDialogOpen}
+                onClose={() => {
+                    setDeleteDialogOpen(false);
+                    setDeleteId(null);
+                }}
+                onConfirm={handleDeleteConfirm}
+                title="Aracı Sil"
+                message="Bu aracı silmek istediğinize emin misiniz? Bu işlem geri alınamaz."
+                confirmText="Evet, Sil"
+                cancelText="Vazgeç"
+                variant="danger"
             />
         </div>
     );

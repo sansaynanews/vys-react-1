@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Edit2, Trash2, LogOut, UserCheck } from "lucide-react";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import dayjs from "dayjs";
 import ZiyaretciDialog from "./ZiyaretciDialog";
 
@@ -14,6 +15,10 @@ export default function ZiyaretciTable() {
     // Dialog
     const [editItem, setEditItem] = useState<any | null>(null);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [deleteId, setDeleteId] = useState<number | null>(null);
+    const [checkoutDialogOpen, setCheckoutDialogOpen] = useState(false);
+    const [checkoutId, setCheckoutId] = useState<number | null>(null);
 
     const fetchData = async () => {
         setLoading(true);
@@ -36,24 +41,42 @@ export default function ZiyaretciTable() {
         fetchData();
     }, [search, selectedDate]);
 
-    const handleCheckout = async (id: number) => {
-        if (!confirm("Ziyaretçi çıkışı yapılsın mı?")) return;
+    const openCheckoutDialog = (id: number) => {
+        setCheckoutId(id);
+        setCheckoutDialogOpen(true);
+    };
+
+    const handleCheckoutConfirm = async () => {
+        if (!checkoutId) return;
         try {
-            await fetch(`/api/ziyaretci/${id}`, {
+            await fetch(`/api/ziyaretci/${checkoutId}`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ cikis_saati: dayjs().format("HH:mm") })
             });
             fetchData();
         } catch (error) { console.error(error); }
+        finally {
+            setCheckoutDialogOpen(false);
+            setCheckoutId(null);
+        }
     };
 
-    const handleDelete = async (id: number) => {
-        if (!confirm("Kaydı silmek istediğinize emin misiniz?")) return;
+    const openDeleteDialog = (id: number) => {
+        setDeleteId(id);
+        setDeleteDialogOpen(true);
+    };
+
+    const handleDeleteConfirm = async () => {
+        if (!deleteId) return;
         try {
-            await fetch(`/api/ziyaretci/${id}`, { method: "DELETE" });
+            await fetch(`/api/ziyaretci/${deleteId}`, { method: "DELETE" });
             fetchData();
         } catch (error) { console.error(error); }
+        finally {
+            setDeleteDialogOpen(false);
+            setDeleteId(null);
+        }
     };
 
     return (
@@ -128,7 +151,7 @@ export default function ZiyaretciTable() {
                                             <div className="flex justify-end gap-2">
                                                 {isInside && (
                                                     <button
-                                                        onClick={() => handleCheckout(item.id)}
+                                                        onClick={() => openCheckoutDialog(item.id)}
                                                         className="px-3 py-1 bg-amber-100 text-amber-700 rounded text-xs hover:bg-amber-200 font-medium flex items-center gap-1"
                                                     >
                                                         <LogOut className="w-3 h-3" /> Çıkış Yap
@@ -137,7 +160,7 @@ export default function ZiyaretciTable() {
                                                 <button onClick={() => { setEditItem(item); setIsDialogOpen(true); }} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded">
                                                     <Edit2 className="w-4 h-4" />
                                                 </button>
-                                                <button onClick={() => handleDelete(item.id)} className="p-1.5 text-red-600 hover:bg-red-50 rounded">
+                                                <button onClick={() => openDeleteDialog(item.id)} className="p-1.5 text-red-600 hover:bg-red-50 rounded">
                                                     <Trash2 className="w-4 h-4" />
                                                 </button>
                                             </div>
@@ -155,6 +178,34 @@ export default function ZiyaretciTable() {
                 onOpenChange={setIsDialogOpen}
                 onSuccess={fetchData}
                 initialData={editItem}
+            />
+
+            <ConfirmDialog
+                open={checkoutDialogOpen}
+                onClose={() => {
+                    setCheckoutDialogOpen(false);
+                    setCheckoutId(null);
+                }}
+                onConfirm={handleCheckoutConfirm}
+                title="Ziyaretçi Çıkışı"
+                message="Ziyaretçi çıkışını kaydetmek istiyor musunuz?"
+                confirmText="Çıkış Yap"
+                cancelText="Vazgeç"
+                variant="warning"
+            />
+
+            <ConfirmDialog
+                open={deleteDialogOpen}
+                onClose={() => {
+                    setDeleteDialogOpen(false);
+                    setDeleteId(null);
+                }}
+                onConfirm={handleDeleteConfirm}
+                title="Kaydı Sil"
+                message="Bu ziyaretçi kaydını silmek istediğinize emin misiniz? Bu işlem geri alınamaz."
+                confirmText="Evet, Sil"
+                cancelText="Vazgeç"
+                variant="danger"
             />
         </div>
     );

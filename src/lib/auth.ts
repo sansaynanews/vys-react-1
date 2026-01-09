@@ -59,7 +59,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                     // 3. Return user object
                     return {
                         id: user.id.toString(),
-                        name: user.kadi.toUpperCase(),
+                        name: user.kadi.toLocaleUpperCase('tr-TR'),
                         username: user.kadi,
                         role: user.yetki,
                         customPermissions: user.ozel_yetkiler,

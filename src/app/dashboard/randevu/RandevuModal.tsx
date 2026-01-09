@@ -8,26 +8,35 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { Trash2, UserPlus, X, Phone, Building2, User, Clock, Calendar as CalendarIcon, FileText } from "lucide-react";
+import { Trash2, UserPlus, X, Phone, Building2, User, Clock, Calendar as CalendarIcon, FileText, Users, UserCheck, Zap, ArrowRight, AlertCircle, ShieldAlert, Gift, Repeat, Car, CalendarCheck } from "lucide-react";
 import { useToastStore } from "@/hooks/useToastStore";
-
-// Modern Calendar imports
 import { format } from "date-fns";
+import dayjs from "dayjs";
 import { tr } from "date-fns/locale";
 import { Calendar } from "@/components/ui/Calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/Popover";
 import { cn } from "@/lib/utils";
+import { APPOINTMENT_STATUS, getStatusConfig } from "@/lib/constants";
+
+
 
 const randevuSchema = z.object({
   ad_soyad: z.string().min(1, "Ad soyad gerekli"),
   kurum: z.string().min(1, "Kurum gerekli"),
   unvan: z.string().optional(),
-  telefon: z.string().optional(), // We'll handle masking manually
+  telefon: z.string().optional(),
   konu: z.string().optional(),
   tarih: z.date(),
   saat: z.string().min(1, "Saat gerekli"),
   notlar: z.string().optional(),
   konuklar: z.array(z.object({ ad: z.string() })).optional(),
+  durum: z.string().optional(),
+  talep_kaynagi: z.string().optional(), // Telefon, Web, Dilekçe, Sözlü, Protokol
+  erteleme_tarihi: z.date().optional(),
+  erteleme_saati: z.string().optional(),
+  erteleme_nedeni: z.string().optional(),
+  hediye_notu: z.string().optional(),
+  arac_plaka: z.string().optional(),
 });
 
 type RandevuFormData = z.infer<typeof randevuSchema>;
@@ -47,6 +56,51 @@ export default function RandevuModal({
 }: RandevuModalProps) {
   const [loading, setLoading] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+
+  // Walk-in (Ziyaretçi) states
+  const [walkIns, setWalkIns] = useState<any[]>([]);
+  const [showWalkInsDialog, setShowWalkInsDialog] = useState(false);
+  const [loadingWalkIns, setLoadingWalkIns] = useState(false);
+
+  // Security & History Check States
+  const [securityResult, setSecurityResult] = useState<{ seviye: string; mesaj: string } | null>(null);
+  const [historyResult, setHistoryResult] = useState<any[]>([]);
+
+  const checkVisitor = async (name: string) => {
+    if (!name || name.length < 3) {
+      setSecurityResult(null);
+      setHistoryResult([]);
+      return;
+    }
+
+    // Check Security
+    try {
+      const res = await fetch(`/api/guvenlik/check?ad_soyad=${encodeURIComponent(name)}`);
+      const data = await res.json();
+      if (data.risk) setSecurityResult(data.risk);
+      else setSecurityResult(null);
+    } catch (error) {
+      console.error("Security check failed:", error);
+    }
+
+    // Check History (Gifts)
+    try {
+      const res = await fetch(`/api/randevu/check-history?ad_soyad=${encodeURIComponent(name)}`);
+      const data = await res.json();
+      setHistoryResult(data.history || []);
+    } catch (error) {
+      console.error("History check failed:", error);
+    }
+  };
+
+  // Recurring States
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [repeatType, setRepeatType] = useState("weekly");
+  const [repeatEndDate, setRepeatEndDate] = useState<Date | undefined>(undefined);
+
+  // Immediate entry state
+  const [isImmediate, setIsImmediate] = useState(false);
+
   const { showToast } = useToastStore();
 
   const {
@@ -64,10 +118,11 @@ export default function RandevuModal({
       unvan: "",
       telefon: "",
       konu: "",
-      tarih: new Date(), // Default to Today
+      tarih: new Date(),
       saat: "",
       notlar: "",
-      konuklar: []
+      konuklar: [],
+      talep_kaynagi: "Telefon" // Default kaynak
     },
   });
 
@@ -78,21 +133,73 @@ export default function RandevuModal({
 
   const selectedDate = watch("tarih");
 
+  // Fetch walk-ins when modal opens or date changes
   useEffect(() => {
+    if (open && !randevu && selectedDate) {
+      fetchWalkIns();
+    }
+  }, [open, randevu, selectedDate]);
+
+  const fetchWalkIns = async () => {
+    try {
+      setLoadingWalkIns(true);
+      const dateStr = format(selectedDate, "yyyy-MM-dd");
+      const response = await fetch(`/api/ziyaret?tarih=${dateStr}&limit=100`);
+
+      if (response.ok) {
+        const result = await response.json();
+        // Filter for visitors who haven't exited yet (cikis_saati is null or empty)
+        // and match the selected date (though API filters by date, good to be safe)
+        const activeVisitors = result.data.filter((v: any) => !v.cikis_saati);
+        setWalkIns(activeVisitors);
+      }
+    } catch (error) {
+      console.error("Error fetching walk-ins:", error);
+    } finally {
+      setLoadingWalkIns(false);
+    }
+  };
+
+  const handleSelectWalkIn = (visitor: any) => {
+    setValue("ad_soyad", visitor.ad_soyad);
+    setValue("kurum", visitor.kurum || "");
+    setValue("unvan", visitor.unvan || "");
+
+    // Format phone if exists
+    if (visitor.iletisim) {
+      // Simple cleanup for display
+      setValue("telefon", visitor.iletisim.replace(/^0/, '').replace(/\D/g, ''));
+    }
+
+    // Add extra info to notes
+    const extraInfo = `Ziyaret Kaydı ID: ${visitor.id}\nGiriş: ${visitor.giris_saati}`;
+    setValue("notlar", extraInfo);
+
+    setShowWalkInsDialog(false);
+    showToast("Ziyaretçi bilgileri aktarıldı", "success");
+  };
+
+  useEffect(() => {
+    setSecurityResult(null); // Reset security warning
+    setHistoryResult([]); // Reset history
+    setIsRecurring(false);
+    setRepeatType("weekly");
+    setRepeatEndDate(undefined);
+
     if (randevu) {
-      // Parse notes to extract guest names if possible, or just leave them in notes
-      // For now, we won't try to parse back from notes to dynamic fields to avoid data loss/confusion
-      // We'll just load the main data
+      checkVisitor(randevu.ad_soyad || ""); // Check existing appointment person
       reset({
         ad_soyad: randevu.ad_soyad || "",
         kurum: randevu.kurum || "",
         unvan: randevu.unvan || "",
-        telefon: randevu.iletisim || "", // Map iletisim to telefon
-        konu: randevu.amac || "", // Map amac to konu
+        telefon: randevu.iletisim || "",
+        konu: randevu.amac || "",
         tarih: randevu.tarih ? new Date(randevu.tarih) : undefined,
         saat: randevu.saat || "",
         notlar: randevu.notlar || "",
-        konuklar: []
+        konuklar: [],
+        durum: getStatusConfig(randevu.durum).id,
+        talep_kaynagi: randevu.talep_kaynagi || "Telefon"
       });
     } else {
       reset({
@@ -101,10 +208,12 @@ export default function RandevuModal({
         unvan: "",
         telefon: "",
         konu: "",
-        tarih: new Date(), // Default to Today
+        tarih: new Date(),
         saat: "",
         notlar: "",
-        konuklar: []
+        konuklar: [],
+        talep_kaynagi: "Telefon",
+        durum: "PENDING_APPROVAL"
       });
     }
   }, [randevu, reset]);
@@ -126,6 +235,40 @@ export default function RandevuModal({
     if (value.length > 8) formatted = `${formatted.slice(0, 10)}-${value.slice(8)}`;
 
     setValue("telefon", formatted);
+  };
+
+  const downloadICS = () => {
+    if (!randevu) return;
+
+    const dateStr = randevu.tarih;
+    const dateTimeStr = `${dayjs(dateStr).format('YYYY-MM-DD')} ${randevu.saat}`;
+    const start = dayjs(dateTimeStr);
+    const end = start.add(30, 'minute');
+
+    const icsData = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//Valilik//Randevu Sistemi//TR',
+      'BEGIN:VEVENT',
+      `UID:${randevu.id}@valilik.gov.tr`,
+      `DTSTAMP:${dayjs().format('YYYYMMDDTHHmm00')}`,
+      `DTSTART:${start.format('YYYYMMDDTHHmm00')}`,
+      `DTEND:${end.format('YYYYMMDDTHHmm00')}`,
+      `SUMMARY:Randevu: ${randevu.ad_soyad}`,
+      `DESCRIPTION:${randevu.notlar || ""}`,
+      `LOCATION:${randevu.kurum || "Valilik"}`,
+      'END:VEVENT',
+      'END:VCALENDAR'
+    ].join('\r\n');
+
+    const blob = new Blob([icsData], { type: 'text/calendar;charset=utf-8' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `randevu-${randevu.id}.ics`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const onSubmit = async (data: RandevuFormData) => {
@@ -157,15 +300,80 @@ export default function RandevuModal({
         ad_soyad: data.ad_soyad,
         kurum: data.kurum,
         unvan: data.unvan,
-        iletisim: formattedPhone, // Send full number
+        iletisim: formattedPhone,
         amac: data.konu,
         tarih: formattedDate,
         saat: data.saat,
-        durum: randevu?.durum || "Bekliyor", // Preserve existing or default
+        durum: isImmediate ? "Onaylandı" : (randevu?.durum || "Bekliyor"),
         notlar: finalNotes,
         katilimci: participantCount,
-        tipi: "Randevu"
+        tipi: "Randevu",
+        talep_kaynagi: data.talep_kaynagi || "Telefon",
+        hediye_notu: data.hediye_notu,
+        arac_plaka: data.arac_plaka,
+        repeat: (!randevu && isRecurring && repeatEndDate) ? {
+          type: repeatType,
+          endDate: format(repeatEndDate, "yyyy-MM-dd")
+        } : undefined
       };
+
+      // Special handling for Postponement (Ertelendi)
+      if (randevu && data.durum === "Ertelendi") {
+        if (!data.erteleme_tarihi || !data.erteleme_saati || !data.erteleme_nedeni) {
+          showToast("Lütfen erteleme nedeni, yeni tarih ve saati giriniz.", "error");
+          setLoading(false);
+          return;
+        }
+
+        // 1. Update existing appointment to "Ertelendi"
+        const postponeNote = `\n\n[ERTELENDİ] Nedeni: ${data.erteleme_nedeni}\nYeni Randevu Tarihi: ${format(data.erteleme_tarihi, "dd.MM.yyyy")} ${data.erteleme_saati}`;
+
+        const updatePayload = {
+          ...payload, // Use basic payload but override status and notes
+          durum: "Ertelendi",
+          notlar: (payload.notlar || "") + postponeNote
+        };
+
+        const updateResponse = await fetch(url, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(updatePayload),
+        });
+
+        if (!updateResponse.ok) throw new Error("Mevcut randevu güncellenemedi");
+
+        // 2. Create NEW appointment
+        const formattedNewDate = format(data.erteleme_tarihi, "yyyy-MM-dd");
+        const newPayload = {
+          ...payload,
+          tarih: formattedNewDate,
+          saat: data.erteleme_saati,
+          durum: "Onaylandı", // New appointment starts as confirmed
+          notlar: `(Ertelenen Randevu)\nÖnceki Tarih: ${format(data.tarih, "dd.MM.yyyy")}\n\n` + (payload.notlar || ""),
+        };
+
+        const createResponse = await fetch("/api/randevu", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(newPayload),
+        });
+
+        if (!createResponse.ok) throw new Error("Yeni randevu oluşturulamadı");
+
+        showToast("Randevu ertelendi ve yeni kayıt oluşturuldu", "success");
+        onSuccess();
+        setLoading(false);
+        return;
+      }
+
+      // Normal UPDATE/CREATE logic (if not Ertelendi or if Create mode)
+
+      // If editing, use the selected status from dropdown
+      // If creating, use logic (Immediate vs Default)
+      // Note: We already set durum in payload initialization, but let's refine it for Edit mode
+      if (randevu && data.durum) {
+        payload.durum = data.durum;
+      }
 
       const response = await fetch(url, {
         method,
@@ -221,11 +429,98 @@ export default function RandevuModal({
       >
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 p-6">
 
+          {/* Actions Bar */}
+          {randevu && (
+            <div className="flex justify-end pb-2">
+              <Button variant="outline" size="sm" onClick={downloadICS} type="button" className="gap-2 text-slate-600 border-slate-300 hover:bg-slate-50">
+                <CalendarCheck className="w-4 h-4" /> Takvime Ekle (.ics)
+              </Button>
+            </div>
+          )}
+
+          {/* Security Warning */}
+          {securityResult && (
+            <div className={cn(
+              "border rounded-lg p-4 flex items-start gap-3 animate-in fade-in slide-in-from-top-2",
+              ["Kritik", "Yüksek"].includes(securityResult.seviye) ? "bg-red-50 border-red-200 text-red-800" :
+                securityResult.seviye === "Orta" ? "bg-orange-50 border-orange-200 text-orange-800" :
+                  "bg-yellow-50 border-yellow-200 text-yellow-800"
+            )}>
+              <ShieldAlert className={cn("w-5 h-5 flex-shrink-0 mt-0.5",
+                ["Kritik", "Yüksek"].includes(securityResult.seviye) ? "text-red-600 animate-pulse" : "text-orange-600"
+              )} />
+              <div>
+                <h4 className="font-bold text-sm">Güvenlik Uyarısı ({securityResult.seviye} Risk)</h4>
+                <p className="text-sm opacity-90">{securityResult.mesaj}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Walk-in Alert / Button */}
+          {!randevu && walkIns.length > 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-amber-800 text-sm">
+                <Users className="w-4 h-4" />
+                <span>Şu an içeride <strong>{walkIns.length}</strong> randevusuz ziyaretçi var.</span>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 bg-white border-amber-200 text-amber-700 hover:bg-amber-50 hover:text-amber-800"
+                onClick={() => setShowWalkInsDialog(true)}
+              >
+                Listeyi Gör
+              </Button>
+            </div>
+          )}
+
+          {/* Immediate Entry Checkbox */}
+          {!randevu && (
+            <div className={`p-4 rounded-xl border transition-all cursor-pointer flex items-center gap-3 ${isImmediate ? 'bg-emerald-50 border-emerald-200 ring-1 ring-emerald-500/20' : 'bg-white border-slate-200 hover:border-slate-300'}`}
+              onClick={() => {
+                const newState = !isImmediate;
+                setIsImmediate(newState);
+                if (newState) {
+                  setValue("tarih", new Date());
+                  setValue("saat", format(new Date(), "HH:mm"));
+                }
+              }}
+            >
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${isImmediate ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
+                <Zap className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="font-medium text-slate-900">Anlık Giriş (Makamda)</div>
+                <div className="text-xs text-slate-500">Randevusuz giriş yapan misafirler için kullanın. Otomatik onaylanır.</div>
+              </div>
+              <div className={`ml-auto w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${isImmediate ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-slate-300 bg-white'}`}>
+                {isImmediate && <UserCheck className="w-3.5 h-3.5" />}
+              </div>
+            </div>
+          )}
+
           {/* Main Info Section */}
           <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 space-y-4">
             <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-2">
               <User className="w-4 h-4" /> Kişi & Kurum Bilgileri
             </h3>
+
+            {/* Talep Kaynağı - En Üstte */}
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-slate-700">Talep Kaynağı</label>
+              <select
+                {...register("talep_kaynagi")}
+                className="w-full h-11 px-3 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-slate-500/20 transition-all"
+              >
+                <option value="Telefon">📞 Telefon</option>
+                <option value="Web">🌐 Web / E-Devlet</option>
+                <option value="Dilekçe">📝 Dilekçe / Resmi Yazı</option>
+                <option value="Sözlü">🗣️ Sözlü Talep</option>
+                <option value="Protokol">🤝 Protokol</option>
+              </select>
+              <p className="text-xs text-slate-400">Randevu talebinin nereden geldiğini seçin</p>
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div className="space-y-1.5">
@@ -233,8 +528,10 @@ export default function RandevuModal({
                 <Input
                   placeholder="Örn: Ahmet Yılmaz"
                   {...register("ad_soyad")}
+                  onBlurCapture={(e) => checkVisitor((e.target as HTMLInputElement).value)}
                   error={errors.ad_soyad?.message}
                   className="bg-white"
+                  autoTitleCase
                 />
               </div>
               <div className="space-y-1.5">
@@ -246,6 +543,7 @@ export default function RandevuModal({
                     {...register("kurum")}
                     error={errors.kurum?.message}
                     className="bg-white pl-10"
+                    autoTitleCase
                   />
                 </div>
               </div>
@@ -259,6 +557,7 @@ export default function RandevuModal({
                   {...register("unvan")}
                   error={errors.unvan?.message}
                   className="bg-white"
+                  autoTitleCase
                 />
               </div>
               <div className="space-y-1.5">
@@ -279,7 +578,112 @@ export default function RandevuModal({
                 </div>
               </div>
             </div>
+
+            <div className="mt-4">
+              <label className="text-sm font-medium text-slate-700">Araç Plakası (Varsa)</label>
+              <div className="relative mt-1.5">
+                <Car className="absolute left-3 top-2.5 w-5 h-5 text-slate-400" />
+                <Input
+                  placeholder="34 ABC 123"
+                  {...register("arac_plaka")}
+                  className="bg-white pl-10 uppercase font-mono placeholder:normal-case placeholder:font-sans"
+                  onChange={(e) => {
+                    e.target.value = e.target.value.toUpperCase();
+                    register("arac_plaka").onChange(e);
+                  }}
+                />
+              </div>
+            </div>
           </div>
+
+          {/* Status & Postponement Section - Only in Edit Mode */}
+          {randevu && (
+            <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 space-y-4">
+              <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4" /> Durum Yönetimi
+              </h3>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-slate-700">Randevu Durumu</label>
+                <select
+                  {...register("durum")}
+                  className="w-full h-11 px-3 rounded-md border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-slate-500/20"
+                >
+                  {Object.values(APPOINTMENT_STATUS).map((status) => (
+                    <option key={status.id} value={status.id}>
+                      {status.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Postponement Fields */}
+              {watch("durum") === "RESCHEDULED_HOST" && (
+                <div className="mt-4 p-4 bg-purple-50 rounded-xl border border-purple-100 space-y-4 animate-in fade-in slide-in-from-top-2">
+                  <div className="flex items-center gap-2 text-purple-800 font-medium pb-2 border-b border-purple-100 mb-2">
+                    <ArrowRight className="w-4 h-4" />
+                    Randevu Erteleme Detayları
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-purple-900">Erteleme Nedeni <span className="text-red-500">*</span></label>
+                    <Input
+                      placeholder="Örn: Makamın acil toplantısı çıktı"
+                      {...register("erteleme_nedeni")}
+                      className="bg-white border-purple-200 focus:border-purple-300 focus:ring-purple-200"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-purple-900">Yeni Tarih <span className="text-red-500">*</span></label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              "w-full justify-start text-left font-normal bg-white h-11 border-purple-200 hover:bg-white hover:text-purple-900",
+                              !watch("erteleme_tarihi") && "text-muted-foreground"
+                            )}
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4 text-purple-500" />
+                            {watch("erteleme_tarihi") ? (
+                              format(watch("erteleme_tarihi")!, "d MMMM yyyy, EEEE", { locale: tr })
+                            ) : (
+                              <span>Yeni tarih seçin</span>
+                            )}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={watch("erteleme_tarihi")}
+                            onSelect={(date) => setValue("erteleme_tarihi", date)}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-purple-900">Yeni Saat <span className="text-red-500">*</span></label>
+                      <div className="relative">
+                        <Clock className="absolute left-3 top-2.5 w-5 h-5 text-purple-400" />
+                        <Input
+                          type="time"
+                          {...register("erteleme_saati")}
+                          className="bg-white pl-10 border-purple-200 focus:border-purple-300 focus:ring-purple-200"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-xs text-purple-600 italic">
+                    * Bu işlem mevcut randevuyu "Ertelendi" olarak işaretler ve seçilen tarihe yeni bir randevu oluşturur.
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Date & Time Section */}
           <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 space-y-4">
@@ -321,17 +725,117 @@ export default function RandevuModal({
               </div>
               <div className="space-y-1.5">
                 <label className="text-sm font-medium text-slate-700">Saat <span className="text-red-500">*</span></label>
-                <div className="relative">
-                  <Clock className="absolute left-3 top-2.5 w-5 h-5 text-slate-400" />
-                  <Input
-                    type="time"
-                    {...register("saat")}
-                    error={errors.saat?.message}
-                    className="bg-white pl-10"
-                  />
+                <div className="flex items-center gap-2">
+                  {/* Hour Select */}
+                  <div className="relative flex-1">
+                    <Clock className="absolute left-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
+                    <select
+                      value={watch("saat")?.split(":")[0] || ""}
+                      onChange={(e) => {
+                        const currentMinute = watch("saat")?.split(":")[1] || "00";
+                        setValue("saat", `${e.target.value}:${currentMinute}`);
+                      }}
+                      className={cn(
+                        "w-full h-11 pl-9 pr-2 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-slate-500/20 appearance-none text-center font-medium",
+                        errors.saat && "border-red-500"
+                      )}
+                    >
+                      <option value="">Sa</option>
+                      {Array.from({ length: 24 }, (_, i) => i).map((hour) => (
+                        <option key={hour} value={hour.toString().padStart(2, '0')}>
+                          {hour.toString().padStart(2, '0')}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <span className="text-2xl font-bold text-slate-400">:</span>
+
+                  {/* Minute Select */}
+                  <div className="relative flex-1">
+                    <select
+                      value={watch("saat")?.split(":")[1] || ""}
+                      onChange={(e) => {
+                        const currentHour = watch("saat")?.split(":")[0] || "09";
+                        setValue("saat", `${currentHour}:${e.target.value}`);
+                      }}
+                      className={cn(
+                        "w-full h-11 px-3 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-slate-500/20 appearance-none text-center font-medium",
+                        errors.saat && "border-red-500"
+                      )}
+                    >
+                      <option value="">Dk</option>
+                      {Array.from({ length: 60 }, (_, i) => i).map((minute) => (
+                        <option key={minute} value={minute.toString().padStart(2, '0')}>
+                          {minute.toString().padStart(2, '0')}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
+                {errors.saat && <p className="text-xs text-red-500 mt-1">{errors.saat.message}</p>}
               </div>
             </div>
+
+
+            {/* Recurring Option - Only New Appointment */}
+            {!randevu && (
+              <div className="mt-4 pt-4 border-t border-slate-200/60">
+                <div
+                  className={cn(
+                    "flex items-center gap-2 cursor-pointer transition-colors group",
+                    isRecurring ? "text-blue-700" : "text-slate-500 hover:text-slate-700"
+                  )}
+                  onClick={() => setIsRecurring(!isRecurring)}
+                >
+                  <div className={cn("w-5 h-5 rounded border flex items-center justify-center transition-all", isRecurring ? "bg-blue-600 border-blue-600" : "bg-white border-slate-300 group-hover:border-slate-400")}>
+                    {isRecurring ? <Repeat className="w-3.5 h-3.5 text-white" /> : null}
+                  </div>
+                  <span className="text-sm font-medium select-none flex items-center gap-2">
+                    Bu randevuyu tekrarla
+                    {!isRecurring && <span className="text-xs text-slate-400 font-normal bg-slate-100 px-2 py-0.5 rounded-full">Periyodik</span>}
+                  </span>
+                </div>
+
+                {isRecurring && (
+                  <div className="mt-4 pl-7 grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tekrar Sıklığı</label>
+                      <select
+                        value={repeatType}
+                        onChange={(e) => setRepeatType(e.target.value)}
+                        className="w-full h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-slate-500/20"
+                      >
+                        <option value="daily">Günlük (Her Gün)</option>
+                        <option value="weekly">Haftalık (Her Hafta)</option>
+                        <option value="biweekly">2 Haftada Bir</option>
+                        <option value="monthly">Aylık (Her Ay)</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Bitiş Tarihi</label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button variant="outline" className={cn("w-full h-10 justify-start text-left font-normal border-slate-200", !repeatEndDate && "text-muted-foreground border-dashed")}>
+                            <CalendarIcon className="mr-2 h-4 w-4 text-slate-400" />
+                            {repeatEndDate ? format(repeatEndDate, "d MMM yyyy", { locale: tr }) : "Bitiş Tarihi Seçin"}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={repeatEndDate}
+                            onSelect={setRepeatEndDate}
+                            initialFocus
+                            disabled={(date) => date < (selectedDate || new Date())}
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Dynamic Guests Section */}
@@ -440,7 +944,48 @@ export default function RandevuModal({
             </div>
           </div>
         </form>
-      </Modal>
+      </Modal >
+
+      {/* Walk-in Select Dialog */}
+      < Modal
+        open={showWalkInsDialog}
+        onClose={() => setShowWalkInsDialog(false)
+        }
+        title="Randevusuz Bekleyenler"
+        size="md"
+      >
+        <div className="p-4">
+          <div className="max-h-[60vh] overflow-y-auto space-y-2 mt-2">
+            {walkIns.length === 0 ? (
+              <div className="text-center py-8 text-slate-500">
+                Bekleyen ziyaretçi bulunamadı.
+              </div>
+            ) : (
+              walkIns.map((visitor) => (
+                <div key={visitor.id} className="flex items-center justify-between p-3 rounded-lg border border-slate-100 hover:bg-slate-50 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-full bg-sky-100 flex items-center justify-center text-sky-600 font-bold text-lg">
+                      {visitor.ad_soyad.charAt(0)}
+                    </div>
+                    <div>
+                      <div className="font-medium text-slate-900">{visitor.ad_soyad}</div>
+                      <div className="text-xs text-slate-500 flex gap-2">
+                        <span>{visitor.kurum || "Kurum yok"}</span>
+                        <span>•</span>
+                        <span>{visitor.giris_saati}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <Button size="sm" onClick={() => handleSelectWalkIn(visitor)} className="bg-sky-600 text-white hover:bg-sky-700">
+                    <UserCheck className="w-4 h-4 mr-1" /> Seç
+                  </Button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </Modal >
+
 
       <ConfirmDialog
         open={deleteDialogOpen}

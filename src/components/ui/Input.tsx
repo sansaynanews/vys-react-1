@@ -1,15 +1,28 @@
-import { InputHTMLAttributes, forwardRef } from "react";
-import { cn } from "@/lib/utils";
+import { InputHTMLAttributes, forwardRef, ChangeEvent } from "react";
+import { cn, titleCase } from "@/lib/utils";
 
 export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   error?: string;
   helperText?: string;
+  autoTitleCase?: boolean;
 }
 
 const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ className, label, error, helperText, type, id, ...props }, ref) => {
+  ({ className, label, error, helperText, type, id, autoTitleCase, onChange, ...props }, ref) => {
     const inputId = id || label?.toLowerCase().replace(/\s+/g, "-");
+
+    const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
+      if (autoTitleCase && type !== "email" && type !== "password" && type !== "number") {
+        const cursorPosition = e.target.selectionStart;
+        e.target.value = titleCase(e.target.value);
+        // Restore cursor position
+        setTimeout(() => {
+          e.target.setSelectionRange(cursorPosition, cursorPosition);
+        }, 0);
+      }
+      onChange?.(e);
+    };
 
     return (
       <div className="w-full">
@@ -34,6 +47,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             className
           )}
           ref={ref}
+          onChange={handleChange}
           {...props}
         />
         {error && (

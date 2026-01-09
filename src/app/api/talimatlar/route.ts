@@ -15,6 +15,9 @@ const talimatSchema = z.object({
     onem_derecesi: z.string().optional().default("Normal"),
     tamamlanma_tarihi: z.string().optional(),
     tamamlayan_kisi: z.string().optional(),
+    // Randevu bağlantısı
+    randevu_id: z.number().optional(),
+    randevu_bilgi: z.string().optional(),
 });
 
 // GET - List

@@ -1,7 +1,7 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-import { yetkiHaritasi } from "@/lib/auth";
+import { yetkiHaritasi } from "@/lib/auth.config";
 
 export function useAuth() {
     const { data: session, status } = useSession();

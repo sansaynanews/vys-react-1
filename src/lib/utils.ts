@@ -57,10 +57,11 @@ export function sleep(ms: number): Promise<void> {
 }
 
 /**
- * Capitalize first letter of string
+ * Capitalize first letter of string (Turkish locale friendly)
  */
 export function capitalize(str: string): string {
-    return str.charAt(0).toUpperCase() + str.slice(1);
+    if (!str) return str;
+    return str.charAt(0).toLocaleUpperCase('tr-TR') + str.slice(1);
 }
 
 /**
@@ -69,4 +70,27 @@ export function capitalize(str: string): string {
 export function truncate(str: string, length: number): string {
     if (str.length <= length) return str;
     return str.slice(0, length) + '...';
+}
+
+/**
+ * Convert string to Title Case (Correct implementation for Turkish characters)
+ * "İSTANBUL" -> "İstanbul", "ışık" -> "Işık"
+ */
+export function titleCase(str: string): string {
+    if (!str) return str;
+    return str
+        .split(' ')
+        .map(word => {
+            if (!word) return word;
+            // First char upper, rest lower, considering Turkish char rules
+            return word.charAt(0).toLocaleUpperCase('tr-TR') + word.slice(1).toLocaleLowerCase('tr-TR');
+        })
+        .join(' ');
+}
+
+/**
+ * Format input value as Title Case on change (for use with input handlers)
+ */
+export function formatInputAsTitleCase(value: string): string {
+    return titleCase(value);
 }

@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
         // Başarılı - kullanıcı bilgilerini döndür
         return NextResponse.json({
             id: user.id.toString(),
-            name: user.kadi.toUpperCase(),
+            name: user.kadi.toLocaleUpperCase('tr-TR'),
             username: user.kadi,
             role: user.yetki,
             customPermissions: user.ozel_yetkiler,

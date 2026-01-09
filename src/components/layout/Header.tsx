@@ -13,6 +13,7 @@ import {
   Clock
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useSidebar } from "@/contexts/SidebarContext";
 
 interface HeaderProps {
   userName: string;
@@ -21,6 +22,7 @@ interface HeaderProps {
 
 export default function Header({ userName, userRole }: HeaderProps) {
   const router = useRouter();
+  const { toggle, isOpen } = useSidebar();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -67,11 +69,20 @@ export default function Header({ userName, userRole }: HeaderProps) {
   };
 
   return (
-    <header className="h-16 bg-white border-b border-slate-200 fixed top-0 right-0 left-64 z-40 shadow-sm">
-      <div className="h-full px-6 flex items-center justify-between">
-        {/* Sol Taraf - Arama */}
-        <div className="flex items-center gap-4 flex-1">
-          <div className="relative max-w-md w-full">
+    <header className="h-16 bg-white border-b border-slate-200 fixed top-0 right-0 left-0 lg:left-64 z-40 shadow-sm">
+      <div className="h-full px-4 lg:px-6 flex items-center justify-between">
+        {/* Sol Taraf - Hamburger + Arama */}
+        <div className="flex items-center gap-3 flex-1">
+          {/* Hamburger Menu Button - Mobile Only */}
+          <button
+            onClick={toggle}
+            className="lg:hidden p-2 -ml-2 hover:bg-slate-100 rounded-lg transition"
+            aria-label="Menüyü aç"
+          >
+            <Menu className="w-6 h-6 text-slate-600" />
+          </button>
+
+          <div className="relative max-w-md w-full hidden sm:block">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
               type="text"

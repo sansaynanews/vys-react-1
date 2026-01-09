@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Edit2, Trash2, FileText, CheckCircle2 } from "lucide-react";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import EvrakDialog from "./EvrakDialog";
 
 export default function EvrakTable() {
@@ -12,6 +13,8 @@ export default function EvrakTable() {
     // Dialog
     const [editItem, setEditItem] = useState<any | null>(null);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [deleteId, setDeleteId] = useState<number | null>(null);
 
     const fetchData = async () => {
         setLoading(true);
@@ -33,12 +36,21 @@ export default function EvrakTable() {
         fetchData();
     }, [search]);
 
-    const handleDelete = async (id: number) => {
-        if (!confirm("Bu kaydı silmek istediğinize emin misiniz?")) return;
+    const openDeleteDialog = (id: number) => {
+        setDeleteId(id);
+        setDeleteDialogOpen(true);
+    };
+
+    const handleDeleteConfirm = async () => {
+        if (!deleteId) return;
         try {
-            await fetch(`/api/evrak/${id}`, { method: "DELETE" });
+            await fetch(`/api/evrak/${deleteId}`, { method: "DELETE" });
             fetchData();
         } catch (error) { console.error(error); }
+        finally {
+            setDeleteDialogOpen(false);
+            setDeleteId(null);
+        }
     };
 
     return (
@@ -110,7 +122,7 @@ export default function EvrakTable() {
                                                 <button onClick={() => { setEditItem(item); setIsDialogOpen(true); }} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded">
                                                     <Edit2 className="w-4 h-4" />
                                                 </button>
-                                                <button onClick={() => handleDelete(item.id)} className="p-1.5 text-red-600 hover:bg-red-50 rounded">
+                                                <button onClick={() => openDeleteDialog(item.id)} className="p-1.5 text-red-600 hover:bg-red-50 rounded">
                                                     <Trash2 className="w-4 h-4" />
                                                 </button>
                                             </div>
@@ -128,6 +140,20 @@ export default function EvrakTable() {
                 onOpenChange={setIsDialogOpen}
                 onSuccess={fetchData}
                 initialData={editItem}
+            />
+
+            <ConfirmDialog
+                open={deleteDialogOpen}
+                onClose={() => {
+                    setDeleteDialogOpen(false);
+                    setDeleteId(null);
+                }}
+                onConfirm={handleDeleteConfirm}
+                title="Evrakı Sil"
+                message="Bu evrak kaydını silmek istediğinize emin misiniz? Bu işlem geri alınamaz."
+                confirmText="Evet, Sil"
+                cancelText="Vazgeç"
+                variant="danger"
             />
         </div>
     );

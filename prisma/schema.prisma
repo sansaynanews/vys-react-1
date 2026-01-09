@@ -233,23 +233,43 @@ model protokol_listesi {
 }
 
 model randevular {
-  id           Int                    @id @default(autoincrement())
-  tipi         String                 @db.VarChar(150)
-  ad_soyad     String?                @db.VarChar(150)
-  unvan        String?                @db.VarChar(150)
-  kurum        String?                @db.VarChar(150)
-  iletisim     String?                @db.VarChar(20)
-  tarih        DateTime?              @db.Date
-  saat         String?                @db.VarChar(10)
-  katilimci    Int?                   @default(1)
-  amac         String?                @db.Text
-  notlar       String?                @db.Text
-  created_at   DateTime               @default(now()) @db.Timestamp(0)
-  durum        String?                @default("Bekliyor") @db.VarChar(50)
-  giris_saati  DateTime?              @db.Time(0)
-  cikis_saati  DateTime?              @db.Time(0)
-  giris_tarihi DateTime?              @db.Date
-  kayit_tipi   randevular_kayit_tipi? @default(Randevu)
+  id                 Int                    @id @default(autoincrement())
+  tipi               String                 @db.VarChar(150)
+  talep_kaynagi      String?                @db.VarChar(50)
+  ad_soyad           String?                @db.VarChar(150)
+  unvan              String?                @db.VarChar(150)
+  kurum              String?                @db.VarChar(150)
+  iletisim           String?                @db.VarChar(20)
+  tarih              DateTime?              @db.Date
+  saat               String?                @db.VarChar(10)
+  katilimci          Int?                   @default(1)
+  amac               String?                @db.Text
+  notlar             String?                @db.Text
+  sonuc_notlari      String?                @db.Text
+  created_at         DateTime               @default(now()) @db.Timestamp(0)
+  durum              String?                @default("Bekliyor") @db.VarChar(50)
+  
+  // İş Akışı Alanları
+  yonlendirilen_birim  String?              @db.VarChar(150) // Yönlendirme yapılan birim
+  yonlendirme_nedeni   String?              @db.Text          // Yönlendirme gerekçesi
+  ret_gerekcesi        String?              @db.Text          // Red gerekçesi
+  havale_edilen        String?              @db.VarChar(150)  // Havale edilen kişi/birim
+  havale_nedeni        String?              @db.Text          // Havale gerekçesi
+  iptal_gerekcesi      String?              @db.Text          // İptal gerekçesi (Makam veya Vatandaş)
+  hediye_notu          String?              @db.Text          // Verilen hediye veya ikram notu
+  
+  // Tekrarlayan Randevu
+  tekrar_id            String?              @db.VarChar(50)   // UUID
+  tekrar_bilgisi       String?              @db.VarChar(100)
+  arac_plaka           String?              @db.VarChar(20)   // Araç Plakası
+  
+  // Süre takibi alanları
+  giris_saati        DateTime?              @db.Time(0)
+  gorusme_baslangic  DateTime?              @db.Time(0)
+  cikis_saati        DateTime?              @db.Time(0)
+  giris_tarihi       DateTime?              @db.Date
+  kayit_tipi         randevular_kayit_tipi? @default(Randevu)
+  talimatlar         talimatlar[]
 
   @@index([ad_soyad], map: "idx_ad_soyad")
   @@index([durum], map: "idx_durum")
@@ -258,6 +278,7 @@ model randevular {
   @@index([tarih], map: "idx_randevular_tarih")
   @@index([tarih, giris_tarihi], map: "idx_randevular_tarihler")
   @@index([tarih], map: "idx_tarih")
+  @@index([talep_kaynagi], map: "idx_randevular_talep_kaynagi")
 }
 
 model rehber {
@@ -378,6 +399,12 @@ model talimatlar {
   saat              DateTime? @default(dbgenerated("('10:00:00')")) @db.Time(0)
   tamamlanma_tarihi DateTime? @db.Date
   tamamlayan_kisi   String?   @db.VarChar(255)
+  // Randevu bağlantısı
+  randevu_id        Int?      
+  randevu_bilgi     String?   @db.VarChar(255) 
+  randevu           randevular? @relation(fields: [randevu_id], references: [id])
+
+  @@index([randevu_id], map: "idx_talimatlar_randevu_id")
 }
 
 model toplanti_salonlari {
@@ -464,4 +491,17 @@ model ziyaretci_log {
 enum randevular_kayit_tipi {
   Randevu
   Randevusuz
+}
+
+model guvenlik_kayitlari {
+  id            Int      @id @default(autoincrement())
+  ad_soyad      String   @db.VarChar(150)
+  tc_kimlik     String?  @db.VarChar(11)
+  telefon       String?  @db.VarChar(20)
+  risk_seviyesi String   @default("Orta") @db.VarChar(20)
+  durum_notu    String   @db.Text
+  created_at    DateTime @default(now()) @db.Timestamp(0)
+
+  @@index([ad_soyad], map: "idx_guvenlik_ad")
+  @@index([tc_kimlik], map: "idx_guvenlik_tc")
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -24,8 +24,10 @@ import {
   ChevronDown,
   ChevronRight,
   LayoutDashboard,
-  Shield
+  Shield,
+  X
 } from "lucide-react";
+import { useSidebar } from "@/contexts/SidebarContext";
 import { cn } from "@/lib/utils";
 
 interface MenuItem {
@@ -44,7 +46,20 @@ interface SidebarProps {
 
 export default function Sidebar({ userRole, userPermissions }: SidebarProps) {
   const pathname = usePathname();
+  const { isOpen, close } = useSidebar();
   const [expandedMenus, setExpandedMenus] = useState<string[]>(["makam", "organizasyon", "idari", "belge"]);
+
+  // Prevent body scroll when mobile sidebar is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [isOpen]);
 
   const menuItems: { [key: string]: MenuItem[] } = {
     dashboard: [
@@ -226,83 +241,123 @@ export default function Sidebar({ userRole, userPermissions }: SidebarProps) {
     yonetim: "YÖNETİM"
   };
 
+  // Handle link click on mobile - close sidebar
+  const handleLinkClick = () => {
+    // Only close on mobile (when sidebar is in overlay mode)
+    if (window.innerWidth < 1024) {
+      close();
+    }
+  };
+
   return (
-    <aside className="w-64 bg-slate-800 text-white min-h-screen fixed left-0 top-0 overflow-y-auto shadow-2xl">
-      {/* Logo */}
-      <div className="p-6 border-b border-slate-700">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
-            <Shield className="w-6 h-6" />
-          </div>
-          <div>
-            <h1 className="font-bold text-lg">Valilik YS</h1>
-            <p className="text-xs text-slate-400">v2.0 - React</p>
-          </div>
-        </div>
-      </div>
+    <>
+      {/* Mobile Overlay */}
+      <div
+        className={cn(
+          "fixed inset-0 bg-black/50 z-40 lg:hidden transition-opacity duration-300",
+          isOpen ? "opacity-100" : "opacity-0 pointer-events-none"
+        )}
+        onClick={close}
+      />
 
-      {/* Navigation */}
-      <nav className="p-4 space-y-2">
-        {Object.entries(menuItems).map(([key, items]) => {
-          const isExpanded = expandedMenus.includes(key);
-          const hasAnyPermission = items.some(item => hasPermission(item.permission));
-
-          if (!hasAnyPermission) return null;
-
-          return (
-            <div key={key}>
-              {key !== "dashboard" && (
-                <button
-                  onClick={() => toggleMenu(key)}
-                  className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold text-slate-400 hover:text-white transition uppercase tracking-wider"
-                >
-                  <span>{categoryTitles[key]}</span>
-                  {isExpanded ? (
-                    <ChevronDown className="w-4 h-4" />
-                  ) : (
-                    <ChevronRight className="w-4 h-4" />
-                  )}
-                </button>
-              )}
-
-              {(key === "dashboard" || isExpanded) && (
-                <div className="space-y-1">
-                  {items.map((item) => {
-                    if (!hasPermission(item.permission)) return null;
-
-                    const Icon = item.icon;
-                    const isActive = pathname === item.href;
-
-                    return (
-                      <Link
-                        key={item.href}
-                        href={item.href!}
-                        className={cn(
-                          "flex items-center gap-3 px-3 py-2.5 rounded-lg transition",
-                          isActive
-                            ? "bg-blue-600 text-white shadow-lg"
-                            : "text-slate-300 hover:bg-slate-700 hover:text-white"
-                        )}
-                      >
-                        <Icon className={cn("w-5 h-5", isActive ? "text-white" : item.color)} />
-                        <span className="text-sm font-medium">{item.label}</span>
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
+      {/* Sidebar */}
+      <aside
+        className={cn(
+          "w-64 bg-slate-800 text-white min-h-screen fixed left-0 top-0 overflow-y-auto shadow-2xl z-50 transition-transform duration-300 ease-in-out",
+          // Desktop: always visible
+          "lg:translate-x-0",
+          // Mobile: slide in/out based on isOpen
+          isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+        )}
+      >
+        {/* Logo */}
+        <div className="p-6 border-b border-slate-700">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
+                <Shield className="w-6 h-6" />
+              </div>
+              <div>
+                <h1 className="font-bold text-lg">Valilik YS</h1>
+                <p className="text-xs text-slate-400">v2.0 - React</p>
+              </div>
             </div>
-          );
-        })}
-      </nav>
-
-      {/* Footer */}
-      <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-700 bg-slate-900">
-        <div className="text-xs text-slate-400 text-center">
-          <p className="font-semibold text-slate-300">{userRole.toUpperCase()}</p>
-          <p className="mt-1">© 2026 Valilik YS</p>
+            {/* Mobile Close Button */}
+            <button
+              onClick={close}
+              className="lg:hidden p-2 hover:bg-slate-700 rounded-lg transition"
+              aria-label="Menüyü kapat"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
-      </div>
-    </aside>
+
+        {/* Navigation */}
+        <nav className="p-4 space-y-2 pb-24">
+          {Object.entries(menuItems).map(([key, items]) => {
+            const isExpanded = expandedMenus.includes(key);
+            const hasAnyPermission = items.some(item => hasPermission(item.permission));
+
+            if (!hasAnyPermission) return null;
+
+            return (
+              <div key={key}>
+                {key !== "dashboard" && (
+                  <button
+                    onClick={() => toggleMenu(key)}
+                    className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold text-slate-400 hover:text-white transition uppercase tracking-wider"
+                  >
+                    <span>{categoryTitles[key]}</span>
+                    {isExpanded ? (
+                      <ChevronDown className="w-4 h-4" />
+                    ) : (
+                      <ChevronRight className="w-4 h-4" />
+                    )}
+                  </button>
+                )}
+
+                {(key === "dashboard" || isExpanded) && (
+                  <div className="space-y-1">
+                    {items.map((item) => {
+                      if (!hasPermission(item.permission)) return null;
+
+                      const Icon = item.icon;
+                      const isActive = pathname === item.href;
+
+                      return (
+                        <Link
+                          key={item.href}
+                          href={item.href!}
+                          onClick={handleLinkClick}
+                          className={cn(
+                            "flex items-center gap-3 px-3 py-2.5 rounded-lg transition",
+                            isActive
+                              ? "bg-blue-600 text-white shadow-lg"
+                              : "text-slate-300 hover:bg-slate-700 hover:text-white"
+                          )}
+                        >
+                          <Icon className={cn("w-5 h-5", isActive ? "text-white" : item.color)} />
+                          <span className="text-sm font-medium">{item.label}</span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </nav>
+
+        {/* Footer */}
+        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-700 bg-slate-900">
+          <div className="text-xs text-slate-400 text-center">
+            <p className="font-semibold text-slate-300">{userRole.toLocaleUpperCase('tr-TR')}</p>
+            <p className="mt-1">© 2026 Valilik YS</p>
+          </div>
+        </div>
+      </aside>
+    </>
   );
 }
+
