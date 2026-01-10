@@ -6,19 +6,37 @@ import moment from 'moment';
 import 'moment/locale/tr';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import {
-    Settings, Plus, Trash2, MapPin, Users, Monitor, Edit2, Sparkles,
-    Calendar as CalendarIcon, Check, X, Info, LayoutGrid, List
+    Settings, Plus, Trash2, MapPin, Users, Monitor, Edit2, Sparkles, ChevronLeft, ChevronRight,
+    Calendar as CalendarIcon, Check, X, Info, LayoutGrid, List, Repeat
 } from 'lucide-react';
 import { Calendar as SmallCalendar } from "@/components/ui/Calendar";
 import { tr } from "date-fns/locale";
+import { format } from "date-fns";
 import { useToastStore } from "@/hooks/useToastStore";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Modal } from "@/components/ui/Modal";
+
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/Popover";
+import { Button } from "@/components/ui/Button";
+import { TimePicker } from "@/components/ui/TimePicker";
+import { cn } from "@/lib/utils";
 
 // 1. AYARLAR
 moment.locale('tr');
 const localizer = momentLocalizer(moment);
 
 // SABİTLER
+const MEETING_TYPES = [
+    "Yönetim ve Karar Alma Toplantıları",
+    "Koordinasyon ve Planlama Toplantıları",
+    "Denetim, İzleme ve Değerlendirme Toplantıları",
+    "Proje, İhale ve Teknik Toplantılar",
+    "Personel ve İnsan Kaynakları Toplantıları",
+    "Bilgilendirme ve İstişare Toplantıları",
+    "Kriz ve Acil Durum Toplantıları",
+    "Protokol, Temsil ve Resmî Toplantılar",
+    "Diğer"
+];
 const STANDARD_EQUIPMENT = [
     { label: "Projeksiyon", icon: "📽️" },
     { label: "Ses Sistemi", icon: "🔊" },
@@ -52,24 +70,128 @@ interface Event {
     desc?: string;
 }
 
+// Custom Toolbar Component
+const CustomToolbar = (toolbar: any) => {
+    const goToBack = () => {
+        toolbar.onNavigate('PREV');
+    };
+
+    const goToNext = () => {
+        toolbar.onNavigate('NEXT');
+    };
+
+    const goToCurrent = () => {
+        toolbar.onNavigate('TODAY');
+    };
+
+    const label = () => {
+        const date = moment(toolbar.date);
+        return (
+            <span className="text-lg font-bold text-slate-800 capitalize">
+                {date.format('D MMMM YYYY')}
+                <span className="text-slate-400 font-normal ml-2 text-sm">{date.format('dddd')}</span>
+            </span>
+        );
+    };
+
+    return (
+        <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4 p-1">
+            {/* Bugün / Geri / İleri */}
+            <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1">
+                <button onClick={goToBack} className="p-1.5 hover:bg-white rounded-md text-slate-600 hover:text-slate-900 transition-all shadow-sm hover:shadow">
+                    <ChevronLeft className="w-5 h-5" />
+                </button>
+                <button onClick={goToCurrent} className="px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-white rounded-md transition-all shadow-sm hover:shadow">
+                    Bugün
+                </button>
+                <button onClick={goToNext} className="p-1.5 hover:bg-white rounded-md text-slate-600 hover:text-slate-900 transition-all shadow-sm hover:shadow">
+                    <ChevronRight className="w-5 h-5" />
+                </button>
+            </div>
+
+            {/* Tarih Başlığı */}
+            <div className="flex-1 text-center">
+                {label()}
+            </div>
+
+            {/* View Switcher */}
+            <div className="flex bg-slate-100 rounded-lg p-1 gap-1">
+                <button
+                    onClick={() => toolbar.onView('day')}
+                    className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${toolbar.view === 'day' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                    Gün
+                </button>
+                <button
+                    onClick={() => toolbar.onView('week')}
+                    className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${toolbar.view === 'week' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                    Hafta
+                </button>
+            </div>
+        </div>
+    );
+};
+
+// Custom Agenda Event Component - Shows full meeting details
+const AgendaEvent = ({ event }: { event: Event }) => {
+    return (
+        <div className="py-2 px-3 hover:bg-slate-50 rounded-lg transition-colors">
+            <div className="flex items-center justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                        <span className="font-semibold text-slate-900 truncate">{event.title}</span>
+                        {event.isProtocol && (
+                            <span className="px-1.5 py-0.5 bg-red-100 text-red-700 text-[10px] font-bold rounded uppercase">
+                                Protokol
+                            </span>
+                        )}
+                    </div>
+                    {event.organizer && (
+                        <p className="text-sm text-slate-500 mt-0.5 flex items-center gap-1.5">
+                            <Users className="w-3.5 h-3.5" />
+                            {event.organizer}
+                        </p>
+                    )}
+                </div>
+                <div className="text-right text-xs text-slate-400 flex-shrink-0">
+                    {moment(event.start).format('HH:mm')} - {moment(event.end).format('HH:mm')}
+                </div>
+            </div>
+        </div>
+    );
+};
+
 export default function MeetingManagement() {
     // --- STATE ---
-    const [activeTab, setActiveTab] = useState<'calendar' | 'booking' | 'admin'>('calendar');
+    const [activeTab, setActiveTab] = useState<'calendar' | 'list' | 'admin'>('calendar');
+    const [isCreatePanelOpen, setCreatePanelOpen] = useState(false);
+
+    // Calendar View State
     const [events, setEvents] = useState<Event[]>([]);
     const [rooms, setRooms] = useState<Room[]>([]);
     const [loading, setLoading] = useState(true);
 
     // Date State for Small Calendar
     const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
+    const [view, setView] = useState(Views.DAY);
 
-    // Booking Form State
+    // Booking Form State - New Structure
+    const [bookingDate, setBookingDate] = useState<Date | undefined>(new Date());
+    const [startTime, setStartTime] = useState("09:00");
+    const [endTime, setEndTime] = useState("10:00");
+
     const [formData, setFormData] = useState({
         title: '',
         resourceId: 0,
-        start: '',
-        end: '',
         organizer: '',
-        isProtocol: false
+        description: '',
+        isProtocol: false,
+        type: '',
+        contactPerson: '',
+        contactInfo: '',
+        recurrence: 'none',
+        repeatCount: 1
     });
 
     // Room Form State
@@ -147,13 +269,21 @@ export default function MeetingManagement() {
 
     // --- ACTIONS ---
     const handleSaveBooking = async () => {
-        if (!formData.title || !formData.start || !formData.end) {
-            showToast("Lütfen zorunlu alanları doldurunuz.", "warning");
+        if (!formData.title) { showToast("Lütfen toplantı konusunu giriniz.", "warning"); return; }
+        if (!bookingDate) { showToast("Lütfen toplantı tarihini seçiniz.", "warning"); return; }
+        if (!startTime) { showToast("Lütfen başlangıç saatini seçiniz.", "warning"); return; }
+        if (!endTime) { showToast("Lütfen bitiş saatini seçiniz.", "warning"); return; }
+
+        // Tarih ve saat birleştirme
+        const dateStr = moment(bookingDate).format('YYYY-MM-DD');
+        const newStart = new Date(`${dateStr}T${startTime}:00`);
+        const newEnd = new Date(`${dateStr}T${endTime}:00`);
+
+        if (newEnd <= newStart) {
+            showToast("Bitiş saati başlangıçtan sonra olmalıdır.", "warning");
             return;
         }
 
-        const newStart = new Date(formData.start);
-        const newEnd = new Date(formData.end);
         const selectedRoomId = Number(formData.resourceId);
 
         // Çakışma Kontrolü
@@ -175,35 +305,54 @@ export default function MeetingManagement() {
                         await fetch(`/api/toplanti/${conflict.id}`, { method: 'DELETE' });
                         await createNewEvent(newStart, newEnd);
                         showToast("Eski toplantı iptal edildi ve yeni kayıt oluşturuldu.", "success");
-                    } catch (error) { showToast("İşlem başarısız.", "error"); }
+                    } catch (error) {
+                        showToast("İşlem başarısız.", "error");
+                    }
                 }
             } else {
                 showToast(`Seçilen saatte salon dolu! Engelleyen: ${conflict.title}`, "error");
             }
         } else {
             await createNewEvent(newStart, newEnd);
-            showToast("Rezervasyon başarıyla oluşturuldu.", "success");
         }
     };
 
     const createNewEvent = async (start: Date, end: Date) => {
-        const res = await fetch('/api/toplanti', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                title: formData.title,
+        try {
+            const payload = {
+                ...formData,
                 resourceId: Number(formData.resourceId),
                 start: start.toISOString(),
-                end: end.toISOString(),
-                organizer: formData.organizer,
-                isProtocol: formData.isProtocol
-            })
-        });
-        if (res.ok) {
-            await fetchData();
-            setFormData({ ...formData, title: '', start: '', end: '', organizer: '', isProtocol: false });
-            setActiveTab('calendar');
-        }
+                end: end.toISOString()
+            };
+
+            const res = await fetch('/api/toplanti', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                fetchData();
+                setCreatePanelOpen(false); // Close drawer instead of switching tabs
+                setFormData({ // Reset form excluding start/end
+                    title: '',
+                    resourceId: 0,
+                    organizer: '',
+                    description: '',
+                    isProtocol: false,
+                    type: '',
+                    contactPerson: '',
+                    contactInfo: '',
+                    recurrence: 'none',
+                    repeatCount: 1
+                });
+                setBookingDate(new Date());
+                setStartTime("09:00");
+                setEndTime("10:00");
+                showToast("Toplantı başarıyla oluşturuldu.", "success");
+            }
+        } catch (err) { showToast("Hata oluştu.", "error"); }
     };
 
     // Ekipman UI Mantığı
@@ -362,25 +511,35 @@ export default function MeetingManagement() {
                         <h1 className="text-xl lg:text-2xl font-bold text-white">Toplantı Yönetimi</h1>
                     </div>
 
-                    {/* Sağ: Tab Butonları */}
-                    <div className="flex flex-wrap gap-1 bg-white/10 backdrop-blur-sm p-1 rounded-lg border border-white/10 w-full lg:w-auto">
+                    {/* Sağ: Tab Butonları ve Aksiyon */}
+                    <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
+                        <div className="flex flex-wrap gap-1 bg-white/10 backdrop-blur-sm p-1 rounded-lg border border-white/10 flex-1 sm:flex-none">
+                            <button
+                                onClick={() => setActiveTab('calendar')}
+                                className={`flex-1 sm:flex-none px-3 lg:px-4 py-2 rounded-md text-xs lg:text-sm font-medium transition-all flex items-center justify-center gap-1.5 ${activeTab === 'calendar' ? 'bg-white text-slate-900 shadow-lg' : 'text-white/80 hover:text-white hover:bg-white/10'}`}
+                            >
+                                <CalendarIcon className="w-4 h-4" /> <span>Takvim</span>
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('list')}
+                                className={`flex-1 sm:flex-none px-3 lg:px-4 py-2 rounded-md text-xs lg:text-sm font-medium transition-all flex items-center justify-center gap-1.5 ${activeTab === 'list' ? 'bg-white text-slate-900 shadow-lg' : 'text-white/80 hover:text-white hover:bg-white/10'}`}
+                            >
+                                <List className="w-4 h-4" /> <span>Liste & Kararlar</span>
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('admin')}
+                                className={`flex-1 sm:flex-none px-3 lg:px-4 py-2 rounded-md text-xs lg:text-sm font-medium transition-all flex items-center justify-center gap-1.5 ${activeTab === 'admin' ? 'bg-white text-slate-900 shadow-lg' : 'text-white/80 hover:text-white hover:bg-white/10'}`}
+                            >
+                                <Settings className="w-4 h-4" /> <span>Salonlar</span>
+                            </button>
+                        </div>
+
                         <button
-                            onClick={() => setActiveTab('calendar')}
-                            className={`flex-1 lg:flex-none px-3 lg:px-4 py-2 rounded-md text-xs lg:text-sm font-medium transition-all flex items-center justify-center gap-1.5 ${activeTab === 'calendar' ? 'bg-white text-slate-900 shadow-lg' : 'text-white/80 hover:text-white hover:bg-white/10'}`}
+                            onClick={() => setCreatePanelOpen(true)}
+                            className="bg-white text-indigo-600 hover:bg-indigo-50 px-4 py-2 rounded-lg text-sm font-bold shadow-lg transition-all flex items-center justify-center gap-2 whitespace-nowrap active:scale-95"
                         >
-                            <CalendarIcon className="w-4 h-4" /> <span>Takvim</span>
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('booking')}
-                            className={`flex-1 lg:flex-none px-3 lg:px-4 py-2 rounded-md text-xs lg:text-sm font-medium transition-all flex items-center justify-center gap-1.5 ${activeTab === 'booking' ? 'bg-white text-slate-900 shadow-lg' : 'text-white/80 hover:text-white hover:bg-white/10'}`}
-                        >
-                            <Plus className="w-4 h-4" /> <span>Rezervasyon</span>
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('admin')}
-                            className={`flex-1 lg:flex-none px-3 lg:px-4 py-2 rounded-md text-xs lg:text-sm font-medium transition-all flex items-center justify-center gap-1.5 ${activeTab === 'admin' ? 'bg-white text-slate-900 shadow-lg' : 'text-white/80 hover:text-white hover:bg-white/10'}`}
-                        >
-                            <Settings className="w-4 h-4" /> <span>Salonlar</span>
+                            <Plus className="w-4 h-4 stroke-[3]" />
+                            <span>Toplantı Planla</span>
                         </button>
                     </div>
                 </div>
@@ -441,19 +600,37 @@ export default function MeetingManagement() {
                             <BigCalendar
                                 localizer={localizer}
                                 events={events}
-                                date={selectedDate}
+                                date={view === Views.AGENDA ? new Date(new Date().getFullYear(), 0, 1) : selectedDate}
                                 onNavigate={(date: Date) => setSelectedDate(date)}
+                                components={{
+                                    toolbar: CustomToolbar,
+                                    agenda: {
+                                        event: AgendaEvent
+                                    }
+                                }}
                                 startAccessor="start"
                                 endAccessor="end"
                                 resourceIdAccessor="id"
                                 resourceTitleAccessor="title"
                                 resources={rooms.length > 0 ? rooms : undefined}
-                                defaultView={Views.DAY}
-                                views={[Views.DAY, Views.WEEK, Views.AGENDA]}
+                                view={view}
+                                onView={setView}
+                                views={[Views.DAY, Views.WEEK]}
                                 step={30}
                                 min={new Date(0, 0, 0, 0, 0, 0)}
                                 max={new Date(0, 0, 0, 23, 59, 59)}
                                 eventPropGetter={eventStyleGetter}
+                                dayPropGetter={(date) => {
+                                    const now = new Date();
+                                    if (
+                                        date.getDate() === now.getDate() &&
+                                        date.getMonth() === now.getMonth() &&
+                                        date.getFullYear() === now.getFullYear()
+                                    ) {
+                                        return { style: { backgroundColor: '#eff6ff' } };
+                                    }
+                                    return {};
+                                }}
                                 culture='tr'
                                 formats={{
                                     dayHeaderFormat: (date: Date) => moment(date).format('dddd D MMMM YYYY'),
@@ -484,42 +661,16 @@ export default function MeetingManagement() {
                     )}
 
                     {/* TAB CONTENT: BOOKING */}
-                    {activeTab === 'booking' && (
-                        <div className="max-w-2xl mx-auto w-full">
-                            <h2 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-3 pb-4 border-b border-slate-100">
-                                <span className="bg-blue-100 text-blue-600 p-2 rounded-lg"><Plus className="w-5 h-5" /></span>
-                                Yeni Toplantı Talebi
-                            </h2>
-                            <div className="space-y-5">
-                                {/* Form fields... (Kodun devamı öncekiyle aynı state'i kullandığı için buraya tekrar yazıyorum) */}
-                                <div>
-                                    <label className="block text-sm font-semibold text-slate-700 mb-1.5">Toplantı Konusu</label>
-                                    <input type="text" className="w-full border border-slate-200 bg-slate-50 p-3 rounded-lg focus:ring-2 focus:ring-blue-500/20 text-sm" value={formData.title} onChange={e => setFormData({ ...formData, title: e.target.value })} />
+                    {/* TAB CONTENT: LIST & DECISIONS */}
+                    {activeTab === 'list' && (
+                        <div className="flex-1 flex items-center justify-center text-center p-12 text-slate-500 bg-slate-50/50 m-4 rounded-2xl border border-dashed border-slate-200">
+                            <div className="max-w-md">
+                                <div className="w-16 h-16 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <List className="w-8 h-8" />
                                 </div>
-                                <div>
-                                    <label className="block text-sm font-semibold text-slate-700 mb-1.5">Düzenleyen Birim</label>
-                                    <input type="text" className="w-full border border-slate-200 bg-slate-50 p-3 rounded-lg focus:ring-2 focus:ring-blue-500/20 text-sm" value={formData.organizer} onChange={e => setFormData({ ...formData, organizer: e.target.value })} />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-semibold text-slate-700 mb-1.5">Salon</label>
-                                    <select className="w-full border border-slate-200 bg-slate-50 p-3 rounded-lg focus:ring-2 focus:ring-blue-500/20 text-sm" value={formData.resourceId} onChange={e => setFormData({ ...formData, resourceId: Number(e.target.value) })}>
-                                        {rooms.map(room => <option key={room.id} value={room.id}>{room.title}</option>)}
-                                    </select>
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">Başlangıç</label><input type="datetime-local" className="w-full border border-slate-200 bg-slate-50 p-3 rounded-lg text-sm" value={formData.start} onChange={e => setFormData({ ...formData, start: e.target.value })} /></div>
-                                    <div><label className="block text-sm font-semibold text-slate-700 mb-1.5">Bitiş</label><input type="datetime-local" className="w-full border border-slate-200 bg-slate-50 p-3 rounded-lg text-sm" value={formData.end} onChange={e => setFormData({ ...formData, end: e.target.value })} /></div>
-                                </div>
-                                <div className="mt-4 bg-red-50 p-4 rounded-xl border border-red-100">
-                                    <label className="flex items-center gap-3 cursor-pointer">
-                                        <input type="checkbox" className="w-5 h-5" checked={formData.isProtocol} onChange={e => setFormData({ ...formData, isProtocol: e.target.checked })} />
-                                        <span className="text-red-700 font-bold text-sm">PROTOKOL (VALİLİK MAKAMI)</span>
-                                    </label>
-                                </div>
-                                <div className="flex gap-4 pt-4">
-                                    <button onClick={() => setActiveTab('calendar')} className="flex-1 py-2 border rounded-lg">Vazgeç</button>
-                                    <button onClick={handleSaveBooking} className="flex-1 py-2 bg-blue-600 text-white rounded-lg">Oluştur</button>
-                                </div>
+                                <h3 className="text-xl font-bold text-slate-900 mb-2">Toplantı Listesi ve Kararlar</h3>
+                                <p className="text-slate-500 mb-6">Burada tüm toplantıların detaylı listesi, alınan kararlar ve yüklenen dosyalar yer alacak.</p>
+                                <button className="text-blue-600 font-medium hover:underline" onClick={() => setActiveTab('calendar')}>Takvime Dön</button>
                             </div>
                         </div>
                     )}
@@ -778,6 +929,267 @@ export default function MeetingManagement() {
                 variant="danger"
                 loading={deleteLoading}
             />
+
+            {/* Create Meeting Modal */}
+            <Modal
+                open={isCreatePanelOpen}
+                onClose={() => setCreatePanelOpen(false)}
+                title={
+                    <div className="flex items-center gap-2">
+                        <Plus className="w-5 h-5 text-indigo-600" />
+                        <span>Yeni Toplantı Planla</span>
+                    </div>
+                }
+                size="lg"
+            >
+                <div className="space-y-6">
+                    {/* Toplantı Temel Bilgileri */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div className="md:col-span-2 space-y-1.5">
+                            <label className="block text-sm font-semibold text-slate-700">Toplantı Konusu</label>
+                            <input
+                                type="text"
+                                className="w-full border border-slate-200 bg-white p-3 rounded-lg focus:ring-2 focus:ring-blue-500/20 text-sm outline-none transition-all"
+                                placeholder="Örn: Haftalık Koordinasyon Toplantısı"
+                                value={formData.title}
+                                onChange={e => setFormData({ ...formData, title: e.target.value })}
+                            />
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <label className="block text-sm font-semibold text-slate-700">Toplantı Türü</label>
+                            <div className="relative">
+                                <select
+                                    className="w-full border border-slate-200 bg-white p-3 rounded-lg focus:ring-2 focus:ring-blue-500/20 text-sm outline-none transition-all appearance-none"
+                                    value={formData.type}
+                                    onChange={e => setFormData({ ...formData, type: e.target.value })}
+                                >
+                                    <option value="">Seçiniz</option>
+                                    {MEETING_TYPES.map((type, index) => (
+                                        <option key={index} value={type}>{type}</option>
+                                    ))}
+                                </select>
+                                <ChevronRight className="absolute right-3 top-3.5 w-4 h-4 text-slate-400 rotate-90 pointer-events-none" />
+                            </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <label className="block text-sm font-semibold text-slate-700">Salon</label>
+                            <div className="relative">
+                                <MapPin className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
+                                <select
+                                    className="w-full border border-slate-200 bg-white p-3 pl-10 rounded-lg focus:ring-2 focus:ring-blue-500/20 text-sm outline-none transition-all appearance-none"
+                                    value={formData.resourceId}
+                                    onChange={e => setFormData({ ...formData, resourceId: Number(e.target.value) })}
+                                >
+                                    <option value={0}>Salon Seçiniz</option>
+                                    {rooms.map(room => <option key={room.id} value={room.id}>{room.title}</option>)}
+                                </select>
+                                <ChevronRight className="absolute right-3 top-3.5 w-4 h-4 text-slate-400 rotate-90 pointer-events-none" />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* İletişim Bilgileri */}
+                    <div className="bg-slate-50/50 p-4 rounded-xl border border-slate-100 space-y-4">
+                        <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                            <Users className="w-4 h-4 text-blue-500" />
+                            Organizasyon ve İletişim
+                        </h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            <div className="space-y-1.5">
+                                <label className="block text-sm font-semibold text-slate-700">Düzenleyen Birim</label>
+                                <input
+                                    type="text"
+                                    className="w-full border border-slate-200 bg-white p-3 rounded-lg focus:ring-2 focus:ring-blue-500/20 text-sm outline-none transition-all"
+                                    placeholder="Örn: Bilgi İşlem Şube Md."
+                                    value={formData.organizer}
+                                    onChange={e => setFormData({ ...formData, organizer: e.target.value })}
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="block text-sm font-semibold text-slate-700">İrtibat Kişisi</label>
+                                <input
+                                    type="text"
+                                    className="w-full border border-slate-200 bg-white p-3 rounded-lg focus:ring-2 focus:ring-blue-500/20 text-sm outline-none transition-all"
+                                    placeholder="Ad Soyad"
+                                    value={formData.contactPerson}
+                                    onChange={e => setFormData({ ...formData, contactPerson: e.target.value })}
+                                />
+                            </div>
+                            <div className="space-y-1.5 md:col-span-2">
+                                <label className="block text-sm font-semibold text-slate-700">İletişim Bilgisi</label>
+                                <input
+                                    type="text"
+                                    className="w-full border border-slate-200 bg-white p-3 rounded-lg focus:ring-2 focus:ring-blue-500/20 text-sm outline-none transition-all"
+                                    placeholder="Telefon, Dahili veya E-posta"
+                                    value={formData.contactInfo}
+                                    onChange={e => setFormData({ ...formData, contactInfo: e.target.value })}
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Zamanlama */}
+                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-4">
+                        <div className="flex items-center gap-2 mb-2">
+                            <CalendarIcon className="w-4 h-4 text-blue-500" />
+                            <h4 className="text-sm font-bold text-slate-700">Zamanlama</h4>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tarih</label>
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button variant="outline" className={cn("w-full justify-start text-left font-normal bg-white h-11 border-slate-200", !bookingDate && "text-muted-foreground")}>
+                                            <CalendarIcon className="mr-2 h-4 w-4 text-slate-500" />
+                                            {bookingDate ? format(bookingDate, "d MMMM yyyy, EEEE", { locale: tr }) : <span>Tarih seçin</span>}
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0" align="start">
+                                        <SmallCalendar mode="single" selected={bookingDate} onSelect={setBookingDate} initialFocus />
+                                    </PopoverContent>
+                                </Popover>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Başlangıç</label>
+                                    <TimePicker value={startTime} onChange={setStartTime} placeholder="09:00" />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Bitiş</label>
+                                    <TimePicker value={endTime} onChange={setEndTime} placeholder="10:00" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Tekrar Seçenekleri */}
+                    <div className="bg-slate-50/50 p-4 rounded-xl border border-slate-100 space-y-4">
+                        <div className="flex items-center gap-2 mb-2">
+                            <Repeat className="w-4 h-4 text-blue-500" />
+                            <h4 className="text-sm font-bold text-slate-700">Tekrar Ayarları</h4>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tekrar Sıklığı</label>
+                                <select
+                                    className="w-full border border-slate-200 bg-white p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 outline-none"
+                                    value={formData.recurrence}
+                                    onChange={e => setFormData({ ...formData, recurrence: e.target.value })}
+                                >
+                                    <option value="none">Tekrar Yok</option>
+                                    <option value="daily">Her Gün</option>
+                                    <option value="weekly">Her Hafta</option>
+                                    <option value="monthly">Her Ay</option>
+                                    <option value="yearly">Her Yıl</option>
+                                </select>
+                            </div>
+                            {formData.recurrence !== 'none' && (
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tekrar Sayısı (Kez)</label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="50"
+                                        className="w-full border border-slate-200 bg-white p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 outline-none"
+                                        value={formData.repeatCount}
+                                        onChange={e => setFormData({ ...formData, repeatCount: Number(e.target.value) })}
+                                    />
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="mt-4 bg-red-50 p-4 rounded-xl border border-red-100/50">
+                        <label className="flex items-center gap-3 cursor-pointer select-none">
+                            <input type="checkbox" className="w-5 h-5 rounded border-red-300 text-red-600 focus:ring-red-500" checked={formData.isProtocol} onChange={e => setFormData({ ...formData, isProtocol: e.target.checked })} />
+                            <span className="text-red-700 font-bold text-sm">PROTOKOL (VALİLİK MAKAMI)</span>
+                        </label>
+                    </div>
+
+                    <div className="flex gap-3 pt-4 border-t border-slate-100">
+                        <Button variant="ghost" className="flex-1" onClick={() => setCreatePanelOpen(false)}>
+                            İptal
+                        </Button>
+                        <Button className="flex-1 bg-blue-600 hover:bg-blue-700 text-white" onClick={handleSaveBooking}>
+                            Toplantıyı Oluştur
+                        </Button>
+                    </div>
+                </div>
+            </Modal>
+
+            {/* Create Meeting Drawer */}
+            {/* Drawer Disabled in favor of Modal */ false && (
+                <>
+                    <div className="fixed inset-0 bg-black/50 z-[60] backdrop-blur-sm transition-opacity" onClick={() => setCreatePanelOpen(false)} />
+                    <div className="fixed inset-y-0 right-0 w-full sm:w-[500px] bg-white z-[70] shadow-2xl transform transition-transform animate-in slide-in-from-right duration-300 flex flex-col">
+                        <div className="flex items-center justify-between p-5 border-b border-slate-100 bg-slate-50">
+                            <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                <Plus className="w-5 h-5 text-indigo-600" />
+                                Yeni Toplantı Planla
+                            </h2>
+                            <button onClick={() => setCreatePanelOpen(false)} className="p-2 hover:bg-slate-200 rounded-full text-slate-500 transition-colors">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-6 space-y-5">
+                            <div>
+                                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Toplantı Konusu</label>
+                                <input type="text" className="w-full border border-slate-200 bg-white p-3 rounded-lg focus:ring-2 focus:ring-blue-500/20 text-sm" value={formData.title} onChange={e => setFormData({ ...formData, title: e.target.value })} />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Düzenleyen Birim</label>
+                                <input type="text" className="w-full border border-slate-200 bg-white p-3 rounded-lg focus:ring-2 focus:ring-blue-500/20 text-sm" value={formData.organizer} onChange={e => setFormData({ ...formData, organizer: e.target.value })} />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Salon</label>
+                                <select className="w-full border border-slate-200 bg-white p-3 rounded-lg focus:ring-2 focus:ring-blue-500/20 text-sm" value={formData.resourceId} onChange={e => setFormData({ ...formData, resourceId: Number(e.target.value) })}>
+                                    {rooms.map(room => <option key={room.id} value={room.id}>{room.title}</option>)}
+                                </select>
+                            </div>
+
+                            <div className="space-y-4 pt-2">
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-semibold text-slate-700">Toplantı Tarihi</label>
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                            <Button variant="outline" className={cn("w-full justify-start text-left font-normal bg-white h-11 border-slate-200", !bookingDate && "text-muted-foreground")}>
+                                                <CalendarIcon className="mr-2 h-4 w-4 text-slate-500" />
+                                                {bookingDate ? format(bookingDate, "d MMMM yyyy, EEEE", { locale: tr }) : <span>Tarih seçin</span>}
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-auto p-0" align="start">
+                                            <SmallCalendar mode="single" selected={bookingDate} onSelect={setBookingDate} initialFocus />
+                                        </PopoverContent>
+                                    </Popover>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-1.5">
+                                        <label className="text-sm font-semibold text-slate-700">Başlangıç</label>
+                                        <TimePicker value={startTime} onChange={setStartTime} placeholder="Seçiniz" />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-sm font-semibold text-slate-700">Bitiş</label>
+                                        <TimePicker value={endTime} onChange={setEndTime} placeholder="Seçiniz" />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="mt-4 bg-red-50 p-4 rounded-xl border border-red-100/50">
+                                <label className="flex items-center gap-3 cursor-pointer select-none">
+                                    <input type="checkbox" className="w-5 h-5 rounded border-red-300 text-red-600 focus:ring-red-500" checked={formData.isProtocol} onChange={e => setFormData({ ...formData, isProtocol: e.target.checked })} />
+                                    <span className="text-red-700 font-bold text-sm">PROTOKOL (VALİLİK MAKAMI)</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div className="p-5 border-t border-slate-100 bg-slate-50/50 flex gap-3">
+                            <button onClick={() => setCreatePanelOpen(false)} className="flex-1 py-2.5 border border-slate-300 rounded-xl font-medium text-slate-700 hover:bg-slate-50 transition-colors">Vazgeç</button>
+                            <button onClick={handleSaveBooking} className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all active:scale-95">Oluştur</button>
+                        </div>
+                    </div>
+                </>
+            )}
         </div>
     );
 }

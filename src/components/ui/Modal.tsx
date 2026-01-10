@@ -12,7 +12,7 @@ interface ModalProps {
   size?: "sm" | "md" | "lg" | "xl";
 }
 
-export function Modal({ open, onClose, title, children, size = "md" }: { open: boolean; onClose: () => void; title?: string; children: React.ReactNode; size?: "sm" | "md" | "lg" | "xl" }) {
+export function Modal({ open, onClose, title, children, size = "md" }: { open: boolean; onClose: () => void; title?: React.ReactNode; children: React.ReactNode; size?: "sm" | "md" | "lg" | "xl" }) {
   const isOpen = open;
   useEffect(() => {
     if (isOpen) {
@@ -48,7 +48,7 @@ export function Modal({ open, onClose, title, children, size = "md" }: { open: b
       >
         {title && (
           <div className="flex items-center justify-between p-6 border-b border-slate-100 flex-shrink-0">
-            <h3 className="text-lg font-bold text-slate-800">{title}</h3>
+            <div className="text-lg font-bold text-slate-800">{title}</div>
             <button
               onClick={onClose}
               className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 transition"

@@ -47,37 +47,55 @@ export async function GET() {
 export async function POST(req: Request) {
     try {
         const body = await req.json();
-        const { title, resourceId, start, end, organizer, isProtocol } = body;
+        const { title, resourceId, start, end, organizer, isProtocol, recurrence, repeatCount } = body;
 
-        const startDate = new Date(start);
-        const endDate = new Date(end);
+        let currentStart = new Date(start);
+        let currentEnd = new Date(end);
 
-        // Tarih alanına sadece gün bilgisini doğru kaydetmek için
-        // UTC offset sorununu aşmak adına, saati öğlen 12'ye sabitleyip kaydedebiliriz
-        // Veya string olarak Parse edebiliriz.
-        // Prisma `Date` tipi için Date objesi bekler.
-
-        const tarih = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate(), 12, 0, 0); // Öğlen 12 yaptık ki timezone kaymasın.
-
-        const bas_saat = startDate.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-        const bit_saat = endDate.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+        // Tekrar sayısı (Varsayılan 1)
+        const count = (recurrence && recurrence !== 'none') ? (Number(repeatCount) || 1) : 1;
 
         const salon = await prisma.toplanti_salonlari.findUnique({ where: { id: Number(resourceId) } });
+        const createdEvents = [];
 
-        const newRez = await prisma.salon_rezervasyonlari.create({
-            data: {
-                baslik: title,
-                salon_id: Number(resourceId),
-                salon_ad: salon?.ad || "",
-                rez_sahibi: organizer,
-                tarih: tarih,
-                bas_saat: bas_saat,
-                bit_saat: bit_saat,
-                kararlar: isProtocol ? "PROTOKOL" : ""
+        for (let i = 0; i < count; i++) {
+            // Tarihi öğle saatine sabitle (Timezone fix)
+            const tarih = new Date(currentStart.getFullYear(), currentStart.getMonth(), currentStart.getDate(), 12, 0, 0);
+
+            const bas_saat = currentStart.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+            const bit_saat = currentEnd.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+
+            const newRez = await prisma.salon_rezervasyonlari.create({
+                data: {
+                    baslik: title,
+                    salon_id: Number(resourceId),
+                    salon_ad: salon?.ad || "",
+                    rez_sahibi: organizer,
+                    tarih: tarih,
+                    bas_saat: bas_saat,
+                    bit_saat: bit_saat,
+                    kararlar: isProtocol ? "PROTOKOL" : ""
+                }
+            });
+            createdEvents.push(newRez);
+
+            // Sonraki tarih hesaplama
+            if (recurrence === 'daily') {
+                currentStart.setDate(currentStart.getDate() + 1);
+                currentEnd.setDate(currentEnd.getDate() + 1);
+            } else if (recurrence === 'weekly') {
+                currentStart.setDate(currentStart.getDate() + 7);
+                currentEnd.setDate(currentEnd.getDate() + 7);
+            } else if (recurrence === 'monthly') {
+                currentStart.setMonth(currentStart.getMonth() + 1);
+                currentEnd.setMonth(currentEnd.getMonth() + 1);
+            } else if (recurrence === 'yearly') {
+                currentStart.setFullYear(currentStart.getFullYear() + 1);
+                currentEnd.setFullYear(currentEnd.getFullYear() + 1);
             }
-        });
+        }
 
-        return NextResponse.json({ success: true, data: newRez });
+        return NextResponse.json({ success: true, created: createdEvents.length });
 
     } catch (error) {
         console.error("Kayıt hatası:", error);
