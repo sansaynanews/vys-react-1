@@ -69,7 +69,7 @@ export default function Header({ userName, userRole }: HeaderProps) {
   };
 
   return (
-    <header className="h-16 bg-white border-b border-slate-200 fixed top-0 right-0 left-0 lg:left-64 z-40 shadow-sm">
+    <header className="h-16 bg-white border-b border-slate-200 fixed top-0 right-0 left-0 lg:left-20 z-40 shadow-sm">
       <div className="h-full px-4 lg:px-6 flex items-center justify-between">
         {/* Sol Taraf - Hamburger + Arama */}
         <div className="flex items-center gap-3 flex-1">

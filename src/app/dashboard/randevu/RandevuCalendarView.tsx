@@ -426,161 +426,159 @@ export default function RandevuCalendarView({ appointments, date, onDateChange, 
                     </Button>
                 </div>
 
-                {/* Content Area - Different layout based on view mode */}
-                {viewMode === "day" ? (
-                    /* Day View - Time Grid */
+                {/* Content Area - Grid System for Day & Week */}
+                {(viewMode === "day" || viewMode === "week") ? (
                     <div className="flex-1 overflow-auto relative bg-slate-50/30 overscroll-contain" ref={scrollRef}>
-                        <div className="flex min-w-[600px] relative px-4 py-4" style={{ height: HOURS_COUNT * HOUR_HEIGHT + 40 }}>
-                            {/* Time Column */}
-                            <div className="w-16 flex-shrink-0 relative z-20">
+                        <div className="flex min-w-[800px] relative px-4 py-4" style={{ height: HOURS_COUNT * HOUR_HEIGHT + 60 }}>
+
+                            {/* Time Axis (Left) */}
+                            <div className="w-14 flex-shrink-0 relative z-20 pt-8 border-r border-slate-100 bg-white/50 backdrop-blur-sm sticky left-0">
                                 {hours.map((hour) => (
-                                    <div key={hour} className="text-xs font-medium text-slate-400 text-right pr-3 relative"
+                                    <div key={hour} className="text-xs font-medium text-slate-400 text-right pr-2 relative"
                                         style={{ height: HOUR_HEIGHT, top: -10 }}>
                                         {hour.toString().padStart(2, '0')}:00
                                     </div>
                                 ))}
                             </div>
 
-                            {/* Grid Area */}
-                            <div className="flex-1 relative bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
-                                {/* Horizontal Guidelines */}
-                                {hours.map((hour) => (
-                                    <div key={hour}
-                                        className="border-b border-slate-100 absolute w-full pointer-events-none"
-                                        style={{ top: (hour - START_HOUR) * HOUR_HEIGHT, height: HOUR_HEIGHT }}>
-                                    </div>
-                                ))}
+                            {/* Main Grid Area */}
+                            <div className="flex-1 flex flex-col relative min-w-0">
 
-                                {/* Vertical Day Lines */}
-                                <div className="absolute top-0 bottom-0 left-0 w-full border-l border-slate-50"></div>
-
-                                {/* Current Time Indicator */}
-                                {isToday && timeTop >= 0 && (
-                                    <div
-                                        className="absolute left-0 right-0 border-t-2 border-red-500 z-50 pointer-events-none flex items-center"
-                                        style={{ top: timeTop }}
-                                    >
-                                        <div className="w-3 h-3 bg-red-500 rounded-full -ml-1.5 border border-white shadow-sm ring-2 ring-red-100"></div>
-                                    </div>
-                                )}
-
-                                {/* Appointments Layer */}
-                                {positionedEvents.map((appointment) => {
-                                    const style = getEventStyle(appointment);
-                                    return (
-                                        <div
-                                            key={appointment.id}
-                                            className={cn(
-                                                "absolute rounded-md p-1.5 text-xs cursor-pointer transition-all hover:brightness-95 hover:shadow-md hover:z-50 border-opacity-50 ring-1 ring-black/5 group/item",
-                                                getStatusStyles(appointment.durum)
-                                            )}
-                                            style={style}
-                                        >
-                                            <div className="flex items-center justify-between gap-1">
-                                                <div className="flex items-center gap-1 font-semibold min-w-0 flex-1">
-                                                    <div className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0",
-                                                        getStatusConfig(appointment.durum).id === "APPROVED" ? "bg-blue-600" :
-                                                            getStatusConfig(appointment.durum).id === "COMPLETED" ? "bg-emerald-600" :
-                                                                "bg-amber-600"
-                                                    )}></div>
-                                                    <span className="truncate text-[10px]">{appointment.ad_soyad}</span>
-                                                </div>
-                                                {/* Action Buttons */}
-                                                <div className="flex items-center opacity-0 group-hover/item:opacity-100 transition-opacity flex-shrink-0">
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); onEditClick?.(appointment); }}
-                                                        className="p-0.5 hover:bg-black/10 rounded transition-colors"
-                                                        title="Düzenle"
-                                                    >
-                                                        <Edit2 className="w-2.5 h-2.5" />
-                                                    </button>
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); onDeleteClick?.(appointment.id); }}
-                                                        className="p-0.5 hover:bg-red-500/20 rounded transition-colors text-red-600"
-                                                        title="Sil"
-                                                    >
-                                                        <Trash2 className="w-2.5 h-2.5" />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                            <div className="opacity-80 truncate text-[9px]">
-                                            </div>
-
-                                            {/* HOVER DETAILS CARD */}
-                                            <div className="hidden group-hover/item:block absolute left-0 top-full mt-2 w-72 bg-white/95 backdrop-blur-sm rounded-xl shadow-2xl border border-slate-200/60 z-[100] p-4 text-left animate-in fade-in slide-in-from-top-1 duration-200 ring-1 ring-black/5 cursor-default">
-                                                {/* Header */}
-                                                <div className="flex items-center gap-2 mb-3 pb-2 border-b border-slate-100">
-                                                    <div className={cn("w-2 h-2 rounded-full",
-                                                        getStatusConfig(appointment.durum).id === "APPROVED" ? "bg-blue-500" :
-                                                            getStatusConfig(appointment.durum).id === "COMPLETED" ? "bg-emerald-500" :
-                                                                "bg-amber-500"
-                                                    )}></div>
-                                                    <span className="font-bold text-slate-800 text-xs uppercase tracking-wide">
-                                                        {getStatusConfig(appointment.durum).label}
-                                                    </span>
-                                                    <span className="ml-auto text-xs font-mono font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
-                                                        {appointment.saat}
-                                                    </span>
-                                                </div>
-
-                                                <div className="space-y-3">
-                                                    {/* Kurum */}
-                                                    <div className="flex items-start gap-3">
-                                                        <Building2 className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
-                                                        <div>
-                                                            <p className="text-[10px] font-bold text-slate-400 uppercase leading-none mb-1">Kurum / Ünvan</p>
-                                                            <p className="text-sm font-bold text-slate-800 leading-snug">
-                                                                {appointment.kurum || "Kurum Belirtilmedi"}
-                                                            </p>
-                                                            {appointment.unvan && <p className="text-xs text-slate-500 mt-0.5">{appointment.unvan}</p>}
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Konu */}
-                                                    {appointment.amac && (
-                                                        <div className="flex items-start gap-3">
-                                                            <MessageSquare className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
-                                                            <div>
-                                                                <p className="text-[10px] font-bold text-slate-400 uppercase leading-none mb-1">Konu</p>
-                                                                <p className="text-xs text-slate-600 leading-relaxed italic">"{appointment.amac}"</p>
-                                                            </div>
-                                                        </div>
-                                                    )}
-
-                                                    {/* Kişisel Bilgi */}
-                                                    <div className="flex items-center gap-3 pt-2 border-t border-slate-100 mt-2">
-                                                        <div className="flex items-center gap-2">
-                                                            <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 text-xs font-bold">
-                                                                {appointment.ad_soyad?.charAt(0) || "?"}
-                                                            </div>
-                                                            <span className="text-xs font-medium text-slate-700">{appointment.ad_soyad}</span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
+                                {/* Header (Days) */}
+                                <div className="flex border-b border-slate-200 sticky top-0 bg-white z-30 shadow-sm h-8">
+                                    {viewMode === "day" ? (
+                                        <div className="flex-1 px-2 flex items-center justify-center font-semibold text-slate-700 text-sm">
+                                            {format(date, "d MMMM EEEE", { locale: tr })}
                                         </div>
-                                    )
-                                })}
+                                    ) : (
+                                        // Week View Columns
+                                        Array.from({ length: 7 }).map((_, i) => {
+                                            const dayDate = addDays(startOfWeek(date, { weekStartsOn: 1 }), i);
+                                            const isTodayHeader = isSameDay(dayDate, new Date());
+                                            return (
+                                                <div key={i} className={cn(
+                                                    "flex-1 flex items-center justify-center gap-1 text-sm border-r border-slate-100 last:border-0",
+                                                    isTodayHeader ? "bg-blue-50/50 text-blue-700 font-bold" : "text-slate-600 font-medium"
+                                                )}>
+                                                    <span className="opacity-70">{format(dayDate, "EEE", { locale: tr })}</span>
+                                                    <span>{format(dayDate, "d", { locale: tr })}</span>
+                                                </div>
+                                            );
+                                        })
+                                    )}
+                                </div>
 
-                                {hours.map((hour) => (
-                                    <div
-                                        key={`slot-${hour}`}
-                                        className="absolute w-full z-0 group"
-                                        style={{ top: (hour - START_HOUR) * HOUR_HEIGHT, height: HOUR_HEIGHT }}
-                                    >
-                                        <div className="hidden group-hover:flex pl-2 pt-1 h-4 cursor-pointer hover:bg-black/[0.05] transition-colors rounded"
-                                            onClick={() => {
-                                                const timeStr = `${hour.toString().padStart(2, '0')}:00`;
-                                                onAddClick?.(date, timeStr);
-                                            }}>
-                                        </div>
+                                {/* Body (Columns & Rows) */}
+                                <div className="flex-1 flex relative">
+                                    {/* Horizontal Time Lines (Background) */}
+                                    <div className="absolute inset-0 z-0 pointer-events-none">
+                                        {hours.map((hour) => (
+                                            <div key={hour}
+                                                className="border-b border-slate-100 w-full"
+                                                style={{ top: (hour - START_HOUR) * HOUR_HEIGHT, height: HOUR_HEIGHT }}>
+                                            </div>
+                                        ))}
                                     </div>
-                                ))}
+
+                                    {/* Day Columns */}
+                                    {(viewMode === "day" ? [date] : Array.from({ length: 7 }).map((_, i) => addDays(startOfWeek(date, { weekStartsOn: 1 }), i))).map((dayDate, dayIndex) => {
+                                        // Calculate events for this specific day
+                                        const dayStr = format(dayDate, "yyyy-MM-dd");
+                                        const dayEvents = appointments.filter(a => a.tarih === dayStr);
+
+                                        // Position logic specific to this day's events
+                                        // Copied logic from getEventsWithPositions but simplified/inline or wrapped
+                                        const getDayPositions = (events: Randevu[]) => {
+                                            const sorted = [...events].sort((a, b) => (a.saat || "").localeCompare(b.saat || ""));
+                                            type PositionedEvent = Randevu & { column: number; totalColumns: number };
+                                            const positioned: PositionedEvent[] = [];
+                                            const parseTime = (t: string | null) => { if (!t) return 0; const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+
+                                            for (const event of sorted) {
+                                                const start = parseTime(event.saat);
+                                                const end = start + 45;
+                                                const overlapping = positioned.filter(p => {
+                                                    const pStart = parseTime(p.saat); const pEnd = pStart + 45;
+                                                    return start < pEnd && end > pStart;
+                                                });
+                                                const taken = new Set(overlapping.map(p => p.column));
+                                                let col = 0; while (taken.has(col)) col++;
+                                                positioned.push({ ...event, column: col, totalColumns: 1 });
+                                            }
+                                            // Expand totalColumns
+                                            for (const event of positioned) {
+                                                const start = parseTime(event.saat); const end = start + 45;
+                                                const overlapping = positioned.filter(p => {
+                                                    const pStart = parseTime(p.saat); const pEnd = pStart + 45;
+                                                    return start < pEnd && end > pStart;
+                                                });
+                                                const maxCol = Math.max(...overlapping.map(p => p.column)) + 1;
+                                                overlapping.forEach(p => p.totalColumns = maxCol);
+                                            }
+                                            return positioned;
+                                        };
+
+                                        const positionedEvents = getDayPositions(dayEvents);
+                                        const isDayToday = isSameDay(dayDate, new Date());
+
+                                        return (
+                                            <div key={dayIndex} className="flex-1 relative border-r border-slate-100 last:border-0 z-10">
+
+                                                {/* Current Time Indicator Line (Only if Today) */}
+                                                {isDayToday && timeTop >= 0 && (
+                                                    <div className="absolute w-full border-t-2 border-red-500 z-50 pointer-events-none" style={{ top: timeTop }}>
+                                                        <div className="w-2 h-2 bg-red-500 rounded-full -mt-1 -ml-1"></div>
+                                                    </div>
+                                                )}
+
+                                                {/* Events */}
+                                                {positionedEvents.map(app => {
+                                                    const style = getEventStyle(app);
+                                                    return (
+                                                        <div
+                                                            key={app.id}
+                                                            className={cn(
+                                                                "absolute rounded-md p-1 border-l-2 text-[10px] cursor-pointer transition-all hover:brightness-95 hover:z-50 hover:shadow-lg overflow-hidden group/item",
+                                                                getStatusStyles(app.durum)
+                                                            )}
+                                                            style={{
+                                                                ...style,
+                                                                left: `calc(${style.left} + 1px)`,
+                                                                width: `calc(${style.width} - 2px)`
+                                                            }}
+                                                            // Simple Click to Edit
+                                                            onClick={(e) => { e.stopPropagation(); onEditClick?.(app); }}
+                                                        >
+                                                            <div className="font-bold truncate leading-tight">{app.saat}</div>
+                                                            <div className="font-semibold truncate leading-tight">{app.ad_soyad}</div>
+                                                            <div className="truncate opacity-75">{app.kurum}</div>
+                                                        </div>
+                                                    );
+                                                })}
+
+                                                {/* Click-to-add slots overlay */}
+                                                {hours.map((hour) => (
+                                                    <div
+                                                        key={`slot-${hour}`}
+                                                        className="absolute w-full hover:bg-black/5 transition-colors cursor-pointer z-0"
+                                                        style={{ top: (hour - START_HOUR) * HOUR_HEIGHT, height: HOUR_HEIGHT }}
+                                                        onClick={() => {
+                                                            const timeStr = `${hour.toString().padStart(2, '0')}:00`;
+                                                            onAddClick?.(dayDate, timeStr);
+                                                        }}
+                                                        title={`${format(dayDate, "d MMM")} ${hour}:00 Randevu Ekle`}
+                                                    >
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
                             </div>
                         </div>
                     </div>
                 ) : (
-                    /* Week/Month View - Grouped List by Date */
+                    /* Month View (Still List for now, can be upgraded later) */
                     <div className="flex-1 overflow-y-auto p-4 space-y-4">
                         {filteredAppointments.length === 0 ? (
                             <div className="flex flex-col items-center justify-center py-16 text-slate-400">
@@ -588,7 +586,7 @@ export default function RandevuCalendarView({ appointments, date, onDateChange, 
                                 <p className="text-lg font-medium">Bu dönemde randevu bulunamadı</p>
                             </div>
                         ) : (
-                            /* Group appointments by date */
+                            /* Existing List Render Logic */
                             Object.entries(
                                 filteredAppointments.reduce((groups: Record<string, Randevu[]>, app) => {
                                     const dateKey = app.tarih || "unknown";
@@ -598,110 +596,19 @@ export default function RandevuCalendarView({ appointments, date, onDateChange, 
                                 }, {})
                             ).map(([dateKey, apps]) => (
                                 <div key={dateKey} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-                                    {/* Date Header */}
-                                    <div className="bg-gradient-to-r from-slate-700 to-slate-600 px-4 py-3 flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 bg-white/10 rounded-lg flex items-center justify-center">
-                                                <span className="text-white font-bold text-lg">
-                                                    {format(new Date(dateKey), "d", { locale: tr })}
-                                                </span>
-                                            </div>
-                                            <div>
-                                                <p className="text-white font-semibold">
-                                                    {format(new Date(dateKey), "EEEE", { locale: tr })}
-                                                </p>
-                                                <p className="text-slate-300 text-sm">
-                                                    {format(new Date(dateKey), "d MMMM yyyy", { locale: tr })}
-                                                </p>
-                                            </div>
-                                        </div>
-                                        <Badge className="bg-white/20 text-white border-0">
-                                            {apps.length} randevu
-                                        </Badge>
+                                    <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 flex justify-between items-center">
+                                        <span className="font-bold text-slate-700">{format(new Date(dateKey), "d MMMM EEEE", { locale: tr })}</span>
+                                        <Badge variant="info">{apps.length}</Badge>
                                     </div>
-
-                                    {/* Appointments for this date */}
                                     <div className="divide-y divide-slate-100">
-                                        {apps.map((appointment) => (
-                                            <div
-                                                key={appointment.id}
-                                                className="px-4 py-3 hover:bg-slate-50 transition-colors flex items-center gap-4"
-                                            >
-                                                {/* Time */}
-                                                <div className="w-16 flex-shrink-0">
-                                                    <span className="font-mono font-bold text-slate-900">
-                                                        {appointment.saat || "--:--"}
-                                                    </span>
+                                        {apps.map(app => (
+                                            <div key={app.id} className="p-3 hover:bg-slate-50 flex items-center gap-3 cursor-pointer" onClick={() => onEditClick?.(app)}>
+                                                <div className="w-12 font-mono font-bold text-slate-500 text-sm">{app.saat}</div>
+                                                <div className="flex-1">
+                                                    <div className="font-medium text-slate-800">{app.ad_soyad}</div>
+                                                    <div className="text-xs text-slate-500">{app.kurum}</div>
                                                 </div>
-
-                                                {/* Status Indicator */}
-                                                <div className={cn(
-                                                    "w-1 h-10 rounded-full flex-shrink-0",
-                                                    getStatusConfig(appointment.durum).id === "APPROVED" ? "bg-blue-500" :
-                                                        getStatusConfig(appointment.durum).id === "COMPLETED" ? "bg-emerald-500" :
-                                                            getStatusConfig(appointment.durum).id === "RESCHEDULED_HOST" ? "bg-purple-500" :
-                                                                getStatusConfig(appointment.durum).id === "REJECTED" ? "bg-red-500" :
-                                                                    "bg-amber-500"
-                                                )}></div>
-
-                                                {/* Details */}
-                                                <div className="flex-1 min-w-0 space-y-1.5">
-                                                    <div className="flex items-center gap-2 flex-wrap">
-                                                        <p className="font-bold text-slate-900">
-                                                            {appointment.ad_soyad || "İsimsiz"}
-                                                        </p>
-                                                        {(appointment.katilimci || 1) > 1 && (
-                                                            <Badge variant="info" className="h-5 px-1.5 text-[10px] bg-sky-100 text-sky-700 hover:bg-sky-200 border-sky-200 gap-1 shadow-sm">
-                                                                <Users className="w-3 h-3" />
-                                                                {appointment.katilimci}
-                                                            </Badge>
-                                                        )}
-                                                        {appointment.unvan && (
-                                                            <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
-                                                                {appointment.unvan}
-                                                            </span>
-                                                        )}
-                                                    </div>
-
-                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-sm text-slate-600">
-                                                        <div className="flex items-center gap-2 min-w-0">
-                                                            <Building2 className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-                                                            <span className="truncate font-medium">{appointment.kurum || "Kurum Yok"}</span>
-                                                        </div>
-                                                        {appointment.amac && (
-                                                            <div className="flex items-center gap-2 min-w-0">
-                                                                <MessageSquare className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-                                                                <span className="truncate italic text-slate-500">{appointment.amac}</span>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </div>
-
-                                                {/* Status Badge */}
-                                                <Badge className={cn(
-                                                    "flex-shrink-0",
-                                                    getStatusConfig(appointment.durum).color
-                                                )}>
-                                                    {getStatusConfig(appointment.durum).label}
-                                                </Badge>
-
-                                                {/* Action Buttons */}
-                                                <div className="flex items-center gap-1 flex-shrink-0">
-                                                    <button
-                                                        onClick={() => onEditClick?.(appointment)}
-                                                        className="p-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-500 hover:text-slate-700"
-                                                        title="Düzenle"
-                                                    >
-                                                        <Edit2 className="w-4 h-4" />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => onDeleteClick?.(appointment.id)}
-                                                        className="p-2 hover:bg-red-50 rounded-lg transition-colors text-slate-500 hover:text-red-600"
-                                                        title="Sil"
-                                                    >
-                                                        <Trash2 className="w-4 h-4" />
-                                                    </button>
-                                                </div>
+                                                <Badge className={getStatusConfig(app.durum).color}>{getStatusConfig(app.durum).label}</Badge>
                                             </div>
                                         ))}
                                     </div>

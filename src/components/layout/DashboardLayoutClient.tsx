@@ -24,7 +24,7 @@ export default function DashboardLayoutClient({
                 <Sidebar userRole={userRole} userPermissions={userPermissions} />
 
                 {/* Main Content Area - Responsive margin */}
-                <div className="lg:ml-64">
+                <div className="lg:ml-20">
                     {/* Header */}
                     <Header userName={userName} userRole={userRole} />
 
