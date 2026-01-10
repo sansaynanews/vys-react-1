@@ -340,7 +340,15 @@ model salon_rezervasyonlari {
   bit_saat    String?   @db.VarChar(10)
   tekrar_tipi String?   @default("yok") @db.VarChar(20)
   created_at  DateTime  @default(now()) @db.Timestamp(0)
-  kararlar    String?   @db.Text
+  kararlar          String?   @db.Text
+  toplanti_format   String?   @db.VarChar(50)
+  ekipmanlar        String?   @db.Text
+  katilimci_listesi String?   @db.Text
+  ikram_talebi      String?   @db.VarChar(255)
+  fotograf_basin    Boolean?  @default(false)
+  gundem_maddeleri  String?   @db.Text
+  durum             String?   @default("Onay Bekliyor") @db.VarChar(50)
+  dokumanlar        toplanti_dokumanlari[]
 }
 
 model sehit_gazi_bilgi {
@@ -504,4 +512,17 @@ model guvenlik_kayitlari {
 
   @@index([ad_soyad], map: "idx_guvenlik_ad")
   @@index([tc_kimlik], map: "idx_guvenlik_tc")
+}
+
+model toplanti_dokumanlari {
+  id             Int                   @id @default(autoincrement())
+  toplanti_id    Int
+  dosya_adi      String                @db.VarChar(255)
+  dosya_yolu     String                @db.VarChar(500)
+  dosya_tipi     String?               @db.VarChar(50)
+  dosya_boyut    Int?
+  yukleme_tarihi DateTime              @default(now()) @db.Timestamp(0)
+  toplanti       salon_rezervasyonlari @relation(fields: [toplanti_id], references: [id], onDelete: Cascade)
+
+  @@index([toplanti_id], map: "idx_dokuman_toplanti")
 }
