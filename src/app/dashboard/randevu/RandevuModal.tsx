@@ -17,6 +17,7 @@ import { Calendar } from "@/components/ui/Calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/Popover";
 import { cn } from "@/lib/utils";
 import { APPOINTMENT_STATUS, getStatusConfig } from "@/lib/constants";
+import { TimePicker } from "@/components/ui/TimePicker";
 
 
 
@@ -46,6 +47,9 @@ interface RandevuModalProps {
   onClose: () => void;
   onSuccess: () => void;
   randevu?: any;
+  initialDate?: Date;
+  initialTime?: string;
+  existingAppointments?: any[];
 }
 
 export default function RandevuModal({
@@ -53,6 +57,9 @@ export default function RandevuModal({
   onClose,
   onSuccess,
   randevu,
+  initialDate,
+  initialTime,
+  existingAppointments
 }: RandevuModalProps) {
   const [loading, setLoading] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -131,7 +138,39 @@ export default function RandevuModal({
     name: "konuklar",
   });
 
+
   const selectedDate = watch("tarih");
+
+  // Conflict Warning State & Logic
+  const [conflictWarning, setConflictWarning] = useState<string | null>(null);
+  const formDateForConflict = watch("tarih");
+  const formTimeForConflict = watch("saat");
+
+  useEffect(() => {
+    if (!open || !existingAppointments || !formDateForConflict || !formTimeForConflict) {
+      setConflictWarning(null);
+      return;
+    }
+
+    const dateStr = format(formDateForConflict, "yyyy-MM-dd");
+
+    const conflict = existingAppointments.find(app => {
+      if (randevu && app.id === randevu.id) return false;
+
+      const statusId = getStatusConfig(app.durum).id;
+      if (statusId === APPOINTMENT_STATUS.REJECTED.id ||
+        statusId === APPOINTMENT_STATUS.NO_SHOW.id ||
+        statusId === APPOINTMENT_STATUS.COMPLETED.id) return false;
+
+      return app.tarih === dateStr && app.saat === formTimeForConflict;
+    });
+
+    if (conflict) {
+      setConflictWarning(`Dikkat: Bu saatte "${conflict.ad_soyad}" (${conflict.kurum}) ile randevu mevcut.`);
+    } else {
+      setConflictWarning(null);
+    }
+  }, [formDateForConflict, formTimeForConflict, existingAppointments, open, randevu]);
 
   // Fetch walk-ins when modal opens or date changes
   useEffect(() => {
@@ -208,15 +247,15 @@ export default function RandevuModal({
         unvan: "",
         telefon: "",
         konu: "",
-        tarih: new Date(),
-        saat: "",
+        tarih: initialDate || new Date(),
+        saat: initialTime || "",
         notlar: "",
         konuklar: [],
         talep_kaynagi: "Telefon",
         durum: "PENDING_APPROVAL"
       });
     }
-  }, [randevu, reset]);
+  }, [randevu, reset, initialDate, initialTime]);
 
   // Phone masking handler
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -596,6 +635,17 @@ export default function RandevuModal({
             </div>
           </div>
 
+          {/* Çakışma Uyarısı */}
+          {conflictWarning && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-3 mb-6 animate-in fade-in slide-in-from-top-1">
+              <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
+              <div>
+                <h4 className="text-sm font-semibold text-amber-800">Çakışma Uyarısı</h4>
+                <p className="text-xs text-amber-700 mt-0.5">{conflictWarning}</p>
+              </div>
+            </div>
+          )}
+
           {/* Status & Postponement Section - Only in Edit Mode */}
           {randevu && (
             <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 space-y-4">
@@ -634,6 +684,17 @@ export default function RandevuModal({
                     />
                   </div>
 
+                  {/* Çakışma Uyarısı */}
+                  {conflictWarning && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-3 mb-4 animate-in fade-in slide-in-from-top-2">
+                      <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
+                      <div>
+                        <h4 className="text-sm font-semibold text-amber-800">Zaman Çakışması</h4>
+                        <p className="text-xs text-amber-700 mt-1">{conflictWarning}</p>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
                       <label className="text-sm font-medium text-purple-900">Yeni Tarih <span className="text-red-500">*</span></label>
@@ -667,14 +728,11 @@ export default function RandevuModal({
 
                     <div className="space-y-1.5">
                       <label className="text-sm font-medium text-purple-900">Yeni Saat <span className="text-red-500">*</span></label>
-                      <div className="relative">
-                        <Clock className="absolute left-3 top-2.5 w-5 h-5 text-purple-400" />
-                        <Input
-                          type="time"
-                          {...register("erteleme_saati")}
-                          className="bg-white pl-10 border-purple-200 focus:border-purple-300 focus:ring-purple-200"
-                        />
-                      </div>
+                      <TimePicker
+                        value={watch("erteleme_saati") || "09:00"}
+                        onChange={(time) => setValue("erteleme_saati", time)}
+                        placeholder="Saat seçin"
+                      />
                     </div>
                   </div>
                   <div className="text-xs text-purple-600 italic">
@@ -725,54 +783,11 @@ export default function RandevuModal({
               </div>
               <div className="space-y-1.5">
                 <label className="text-sm font-medium text-slate-700">Saat <span className="text-red-500">*</span></label>
-                <div className="flex items-center gap-2">
-                  {/* Hour Select */}
-                  <div className="relative flex-1">
-                    <Clock className="absolute left-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
-                    <select
-                      value={watch("saat")?.split(":")[0] || ""}
-                      onChange={(e) => {
-                        const currentMinute = watch("saat")?.split(":")[1] || "00";
-                        setValue("saat", `${e.target.value}:${currentMinute}`);
-                      }}
-                      className={cn(
-                        "w-full h-11 pl-9 pr-2 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-slate-500/20 appearance-none text-center font-medium",
-                        errors.saat && "border-red-500"
-                      )}
-                    >
-                      <option value="">Sa</option>
-                      {Array.from({ length: 24 }, (_, i) => i).map((hour) => (
-                        <option key={hour} value={hour.toString().padStart(2, '0')}>
-                          {hour.toString().padStart(2, '0')}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <span className="text-2xl font-bold text-slate-400">:</span>
-
-                  {/* Minute Select */}
-                  <div className="relative flex-1">
-                    <select
-                      value={watch("saat")?.split(":")[1] || ""}
-                      onChange={(e) => {
-                        const currentHour = watch("saat")?.split(":")[0] || "09";
-                        setValue("saat", `${currentHour}:${e.target.value}`);
-                      }}
-                      className={cn(
-                        "w-full h-11 px-3 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-slate-500/20 appearance-none text-center font-medium",
-                        errors.saat && "border-red-500"
-                      )}
-                    >
-                      <option value="">Dk</option>
-                      {Array.from({ length: 60 }, (_, i) => i).map((minute) => (
-                        <option key={minute} value={minute.toString().padStart(2, '0')}>
-                          {minute.toString().padStart(2, '0')}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
+                <TimePicker
+                  value={watch("saat") || "09:00"}
+                  onChange={(time) => setValue("saat", time)}
+                  placeholder="Saat seçin"
+                />
                 {errors.saat && <p className="text-xs text-red-500 mt-1">{errors.saat.message}</p>}
               </div>
             </div>

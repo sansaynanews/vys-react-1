@@ -6,6 +6,7 @@ import "dayjs/locale/tr";
 import { Edit2, Trash2, Search, Filter } from "lucide-react";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import RandevuDialog from "./RandevuDialog";
+import { getStatusConfig } from "@/lib/constants";
 
 dayjs.locale("tr");
 
@@ -149,16 +150,10 @@ export default function RandevuTable() {
                                     </td>
                                     <td className="px-6 py-3">
                                         <span
-                                            className={`inline-flex px-2 py-1 text-xs font-medium rounded-md ${item.durum === "Onaylandı"
-                                                ? "bg-emerald-100 text-emerald-700"
-                                                : item.durum === "Bekliyor"
-                                                    ? "bg-amber-100 text-amber-700"
-                                                    : item.durum === "İptal"
-                                                        ? "bg-red-100 text-red-700"
-                                                        : "bg-slate-100 text-slate-700"
+                                            className={`inline-flex px-2 py-1 text-xs font-medium rounded-md ${getStatusConfig(item.durum).color
                                                 }`}
                                         >
-                                            {item.durum}
+                                            {getStatusConfig(item.durum).label}
                                         </span>
                                     </td>
                                     <td className="px-6 py-3 text-right">

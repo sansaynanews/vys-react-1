@@ -4,7 +4,7 @@ export const APPOINTMENT_STATUS = {
     PENDING_APPROVAL: {
         id: "PENDING_APPROVAL",
         label: "Onay Bekliyor (Makam)",
-        color: "bg-yellow-100 text-yellow-800 border-yellow-200",
+        color: "bg-amber-100 text-amber-800 border-amber-200",
         icon: "Clock",
         description: "Talep girildi, Makamın (Vali Bey) onayını bekliyor."
     },
@@ -48,7 +48,7 @@ export const APPOINTMENT_STATUS = {
     APPROVED: {
         id: "APPROVED",
         label: "Onaylandı",
-        color: "bg-green-100 text-green-800 border-green-200",
+        color: "bg-blue-100 text-blue-800 border-blue-200",
         icon: "CheckCircle2",
         description: "Onaylandı ve tarih/saat atandı."
     },
@@ -59,7 +59,7 @@ export const APPOINTMENT_STATUS = {
         label: "Ziyaretçi Erteleme Talebi",
         color: "bg-pink-100 text-pink-800 border-pink-200",
         icon: "History",
-        description: "Ziyaretçi erteleme talep etti, Makam onayı bekliyor."
+        description: "Ziyaretçi erteleme talep etti, Makam onay bekliyor."
     },
     RESCHEDULED_HOST: {
         id: "RESCHEDULED_HOST",
@@ -94,7 +94,7 @@ export const APPOINTMENT_STATUS = {
     COMPLETED: {
         id: "COMPLETED",
         label: "Tamamlandı",
-        color: "bg-slate-100 text-slate-800 border-slate-200",
+        color: "bg-emerald-100 text-emerald-800 border-emerald-200",
         icon: "CheckCheck",
         description: "Görüşme bitti, çıktı."
     },
@@ -111,7 +111,7 @@ export const getStatusConfig = (statusId: string | undefined | null) => {
     if (statusId === "Onaylandı") return APPOINTMENT_STATUS.APPROVED;
     if (statusId === "Ertelendi") return APPOINTMENT_STATUS.RESCHEDULED_HOST;
     if (statusId === "İptal") return APPOINTMENT_STATUS.REJECTED;
-    if (statusId === "Tamamlandı") return APPOINTMENT_STATUS.COMPLETED;
+    if (statusId === "Tamamlandı" || statusId === "Görüşüldü") return APPOINTMENT_STATUS.COMPLETED;
 
     return APPOINTMENT_STATUS[statusId as AppointmentStatusType] || {
         id: statusId,

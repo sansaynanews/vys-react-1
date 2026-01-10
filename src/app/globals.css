@@ -57,11 +57,125 @@ body {
   background-size: 200% 200%;
   animation: gradient-x 15s ease infinite;
 }
+
 @media print {
-  aside, nav, header, button, .no-print { display: none !important; }
-  main { margin: 0 !important; padding: 0 !important; width: 100% !important; }
-  body { background: white !important; color: black !important; }
-  table { width: 100% !important; border-collapse: collapse !important; font-size: 10pt !important; }
-  th, td { border: 1px solid #ddd !important; padding: 4px !important; }
-  tr { page-break-inside: avoid; }
+
+  aside,
+  nav,
+  header,
+  button,
+  .no-print {
+    display: none !important;
+  }
+
+  main {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+  }
+
+  body {
+    background: white !important;
+    color: black !important;
+  }
+
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    font-size: 10pt !important;
+  }
+
+  th,
+  td {
+    border: 1px solid #ddd !important;
+    padding: 4px !important;
+  }
+
+  tr {
+    page-break-inside: avoid;
+  }
+}
+
+/* ========================================
+   React Day Picker - Custom Theme
+   ======================================== */
+
+/* Weekend Days */
+.rdp-weekend .rdp-day_button {
+  color: #dc2626 !important;
+  font-weight: 600;
+}
+
+/* Holiday Days */
+.rdp-holiday .rdp-day_button {
+  background-color: #f43f5e !important;
+  color: white !important;
+  font-weight: 700;
+  border-radius: 8px;
+}
+
+/* Today */
+.rdp-today .rdp-day_button {
+  background-color: #fef3c7 !important;
+  color: #92400e !important;
+  font-weight: 700;
+  border: 2px solid #f59e0b !important;
+  border-radius: 8px;
+}
+
+/* Selected Day */
+.rdp-selected .rdp-day_button {
+  background-color: #2563eb !important;
+  color: white !important;
+  font-weight: 600;
+  border-radius: 8px;
+}
+
+/* Day Button Base */
+.rdp-day_button {
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.rdp-day_button:hover {
+  background-color: #f1f5f9;
+}
+
+/* Caption/Header Style */
+.rdp-caption_label {
+  font-weight: 700;
+  font-size: 1rem;
+  color: #1e293b;
+}
+
+/* Weekday Headers */
+.rdp-weekday {
+  font-weight: 600;
+  font-size: 0.75rem;
+  color: #64748b;
+  padding: 8px 0;
+}
+
+/* Navigation Buttons */
+.rdp-button_previous,
+.rdp-button_next {
+  border-radius: 8px;
+  padding: 4px;
+  transition: background-color 0.2s;
+}
+
+.rdp-button_previous:hover,
+.rdp-button_next:hover {
+  background-color: #f1f5f9;
+}
+
+/* Outside Days (Previous/Next Month) */
+.rdp-outside .rdp-day_button {
+  opacity: 0.4;
+}
+
+/* Calendar Container */
+.rdp-root {
+  --rdp-accent-color: #2563eb;
+  --rdp-accent-background-color: #eff6ff;
 }

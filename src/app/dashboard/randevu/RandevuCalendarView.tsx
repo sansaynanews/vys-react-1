@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 import { Clock, MapPin, Plus, MoreHorizontal, ChevronLeft, ChevronRight, Calendar as CalendarIcon, CalendarDays, CalendarRange, CalendarCheck, Edit2, Trash2, Building2, Users, MessageSquare } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
-import { getStatusConfig } from "@/lib/constants";
+import { getStatusConfig, APPOINTMENT_STATUS } from "@/lib/constants";
 
 // Real Data Interface matching page.tsx
 interface Randevu {
@@ -49,9 +49,9 @@ interface RandevuCalendarViewProps {
     onDateChange: (date: Date) => void;
     viewMode: ViewMode;
     onViewModeChange: (mode: ViewMode) => void;
-    onAddClick?: () => void;
     onEditClick?: (randevu: Randevu) => void;
     onDeleteClick?: (id: number) => void;
+    onAddClick?: (date?: Date, time?: string) => void;
 }
 
 // Config - 24 Hour Format
@@ -236,6 +236,16 @@ export default function RandevuCalendarView({ appointments, date, onDateChange, 
 
     return (
         <div className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-22rem)] min-h-[600px]">
+            <style jsx global>{`
+                @media print {
+                    @page { size: landscape; margin: 5mm; }
+                    body * { visibility: hidden; }
+                    .randevu-print-area, .randevu-print-area * { visibility: visible; }
+                    .randevu-print-area { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible !important; }
+                    .no-print { display: none !important; }
+                }
+            `}</style>
+
             {/* Sidebar */}
             <div className="w-full lg:w-80 flex-shrink-0 flex flex-col gap-6">
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4">
@@ -248,31 +258,114 @@ export default function RandevuCalendarView({ appointments, date, onDateChange, 
                     />
                 </div>
 
-                {/* Legend */}
-                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-4">
-                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Durumlar</h3>
-                    <div className="space-y-3">
-                        {["Bekliyor", "Onaylandı", "Kapıda Bekliyor", "Görüşmede", "Görüşüldü", "Makam İptal Etti", "Ziyaretçi Gelmedi", "Ertelendi"].map(status => (
-                            <div key={status} className="flex items-center gap-3 text-sm text-slate-600">
-                                <div className={cn("w-3 h-3 rounded-full",
-                                    status === "Onaylandı" ? "bg-blue-500" :
-                                        status === "Görüşüldü" ? "bg-emerald-500" :
-                                            status === "Makam İptal Etti" ? "bg-red-500" :
-                                                status === "Ertelendi" ? "bg-purple-500" :
-                                                    status === "Ziyaretçi Gelmedi" ? "bg-slate-500" :
-                                                        status === "Kapıda Bekliyor" ? "bg-orange-500" :
-                                                            status === "Görüşmede" ? "bg-cyan-500" :
-                                                                "bg-amber-500"
-                                )}></div>
-                                {status}
+                {/* Daily Summary & Upcoming */}
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-5">
+                    {/* Mini Stats */}
+                    <div>
+                        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Günlük Özet</h3>
+                        <div className="grid grid-cols-2 gap-2">
+                            <div className="bg-blue-50 rounded-lg p-3 text-center border border-blue-100">
+                                <p className="text-2xl font-bold text-blue-700">
+                                    {appointments.filter(a => {
+                                        const statusId = getStatusConfig(a.durum).id;
+                                        return statusId === APPOINTMENT_STATUS.APPROVED.id;
+                                    }).length}
+                                </p>
+                                <p className="text-[10px] font-medium text-blue-600 uppercase">Onaylı</p>
                             </div>
-                        ))}
+                            <div className="bg-amber-50 rounded-lg p-3 text-center border border-amber-100">
+                                <p className="text-2xl font-bold text-amber-700">
+                                    {appointments.filter(a => {
+                                        const statusId = getStatusConfig(a.durum).id;
+                                        return statusId === APPOINTMENT_STATUS.WAITING_ROOM.id;
+                                    }).length}
+                                </p>
+                                <p className="text-[10px] font-medium text-amber-600 uppercase">Beklemede</p>
+                            </div>
+                            <div className="bg-cyan-50 rounded-lg p-3 text-center border border-cyan-100">
+                                <p className="text-2xl font-bold text-cyan-700">
+                                    {appointments.filter(a => {
+                                        const statusId = getStatusConfig(a.durum).id;
+                                        return statusId === APPOINTMENT_STATUS.IN_MEETING.id;
+                                    }).length}
+                                </p>
+                                <p className="text-[10px] font-medium text-cyan-600 uppercase">Görüşmede</p>
+                            </div>
+                            <div className="bg-emerald-50 rounded-lg p-3 text-center border border-emerald-100">
+                                <p className="text-2xl font-bold text-emerald-700">
+                                    {appointments.filter(a => {
+                                        const statusId = getStatusConfig(a.durum).id;
+                                        return statusId === APPOINTMENT_STATUS.COMPLETED.id;
+                                    }).length}
+                                </p>
+                                <p className="text-[10px] font-medium text-emerald-600 uppercase">Tamamlandı</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Upcoming Appointments */}
+                    <div>
+                        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Sıradaki Görüşmeler</h3>
+                        <div className="space-y-2">
+                            {(() => {
+                                const now = new Date();
+                                const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+                                const upcoming = appointments
+                                    .filter(a => {
+                                        const statusId = getStatusConfig(a.durum).id;
+                                        return (statusId === APPOINTMENT_STATUS.APPROVED.id ||
+                                            statusId === APPOINTMENT_STATUS.WAITING_ROOM.id) &&
+                                            a.saat && a.saat >= currentTime;
+                                    })
+                                    .sort((a, b) => (a.saat || "").localeCompare(b.saat || ""))
+                                    .slice(0, 3);
+
+                                if (upcoming.length === 0) {
+                                    return (
+                                        <div className="text-center py-4 text-sm text-slate-400 italic">
+                                            Bugün için bekleyen randevu yok
+                                        </div>
+                                    );
+                                }
+
+                                return upcoming.map((app, idx) => (
+                                    <div
+                                        key={app.id}
+                                        className={cn(
+                                            "flex items-center gap-3 p-3 rounded-lg border transition-all hover:shadow-sm",
+                                            idx === 0
+                                                ? "bg-blue-50 border-blue-200"
+                                                : "bg-slate-50 border-slate-200"
+                                        )}
+                                    >
+                                        <div className={cn(
+                                            "flex-shrink-0 w-14 h-14 rounded-lg flex flex-col items-center justify-center",
+                                            idx === 0 ? "bg-blue-500 text-white" : "bg-slate-200 text-slate-600"
+                                        )}>
+                                            <span className="font-bold text-sm">{app.saat}</span>
+                                            <span className="text-[9px] opacity-80">
+                                                {app.tarih ? format(new Date(app.tarih), "dd MMM", { locale: tr }) : "-"}
+                                            </span>
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                            <p className="text-sm font-semibold text-slate-800 truncate">{app.ad_soyad}</p>
+                                            <p className="text-[11px] text-slate-500 truncate">{app.kurum}</p>
+                                        </div>
+                                        {idx === 0 && (
+                                            <span className="px-2 py-0.5 text-[10px] font-bold uppercase bg-blue-100 text-blue-700 rounded-full">
+                                                Sıradaki
+                                            </span>
+                                        )}
+                                    </div>
+                                ));
+                            })()}
+                        </div>
                     </div>
                 </div>
             </div>
 
             {/* Main Calendar Area - Time Grid */}
-            <div className="flex-1 bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col h-full overflow-hidden">
+            <div className="randevu-print-area flex-1 bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col h-full overflow-hidden">
                 {/* Header Toolbar */}
                 <div className="p-4 border-b border-slate-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white sticky top-0 z-30">
                     <div className="flex items-center gap-4 flex-wrap">
@@ -327,7 +420,7 @@ export default function RandevuCalendarView({ appointments, date, onDateChange, 
                             {getHeaderLabel()}
                         </h2>
                     </div>
-                    <Button onClick={onAddClick} className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg shadow-blue-500/20">
+                    <Button onClick={() => onAddClick?.()} className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg shadow-blue-500/20">
                         <Plus className="w-4 h-4 mr-2" />
                         Randevu Ekle
                     </Button>
@@ -336,7 +429,7 @@ export default function RandevuCalendarView({ appointments, date, onDateChange, 
                 {/* Content Area - Different layout based on view mode */}
                 {viewMode === "day" ? (
                     /* Day View - Time Grid */
-                    <div className="flex-1 overflow-y-auto relative bg-slate-50/30" ref={scrollRef}>
+                    <div className="flex-1 overflow-auto relative bg-slate-50/30 overscroll-contain" ref={scrollRef}>
                         <div className="flex min-w-[600px] relative px-4 py-4" style={{ height: HOURS_COUNT * HOUR_HEIGHT + 40 }}>
                             {/* Time Column */}
                             <div className="w-16 flex-shrink-0 relative z-20">
@@ -378,7 +471,7 @@ export default function RandevuCalendarView({ appointments, date, onDateChange, 
                                         <div
                                             key={appointment.id}
                                             className={cn(
-                                                "absolute rounded-md p-1.5 text-xs cursor-pointer transition-all hover:brightness-95 hover:shadow-md hover:z-40 border-opacity-50 overflow-hidden ring-1 ring-black/5 group/item",
+                                                "absolute rounded-md p-1.5 text-xs cursor-pointer transition-all hover:brightness-95 hover:shadow-md hover:z-50 border-opacity-50 ring-1 ring-black/5 group/item",
                                                 getStatusStyles(appointment.durum)
                                             )}
                                             style={style}
@@ -386,8 +479,8 @@ export default function RandevuCalendarView({ appointments, date, onDateChange, 
                                             <div className="flex items-center justify-between gap-1">
                                                 <div className="flex items-center gap-1 font-semibold min-w-0 flex-1">
                                                     <div className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0",
-                                                        appointment.durum === "Onaylandı" ? "bg-blue-600" :
-                                                            appointment.durum === "Görüşüldü" ? "bg-emerald-600" :
+                                                        getStatusConfig(appointment.durum).id === "APPROVED" ? "bg-blue-600" :
+                                                            getStatusConfig(appointment.durum).id === "COMPLETED" ? "bg-emerald-600" :
                                                                 "bg-amber-600"
                                                     )}></div>
                                                     <span className="truncate text-[10px]">{appointment.ad_soyad}</span>
@@ -411,13 +504,64 @@ export default function RandevuCalendarView({ appointments, date, onDateChange, 
                                                 </div>
                                             </div>
                                             <div className="opacity-80 truncate text-[9px]">
-                                                {appointment.saat}
+                                            </div>
+
+                                            {/* HOVER DETAILS CARD */}
+                                            <div className="hidden group-hover/item:block absolute left-0 top-full mt-2 w-72 bg-white/95 backdrop-blur-sm rounded-xl shadow-2xl border border-slate-200/60 z-[100] p-4 text-left animate-in fade-in slide-in-from-top-1 duration-200 ring-1 ring-black/5 cursor-default">
+                                                {/* Header */}
+                                                <div className="flex items-center gap-2 mb-3 pb-2 border-b border-slate-100">
+                                                    <div className={cn("w-2 h-2 rounded-full",
+                                                        getStatusConfig(appointment.durum).id === "APPROVED" ? "bg-blue-500" :
+                                                            getStatusConfig(appointment.durum).id === "COMPLETED" ? "bg-emerald-500" :
+                                                                "bg-amber-500"
+                                                    )}></div>
+                                                    <span className="font-bold text-slate-800 text-xs uppercase tracking-wide">
+                                                        {getStatusConfig(appointment.durum).label}
+                                                    </span>
+                                                    <span className="ml-auto text-xs font-mono font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+                                                        {appointment.saat}
+                                                    </span>
+                                                </div>
+
+                                                <div className="space-y-3">
+                                                    {/* Kurum */}
+                                                    <div className="flex items-start gap-3">
+                                                        <Building2 className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
+                                                        <div>
+                                                            <p className="text-[10px] font-bold text-slate-400 uppercase leading-none mb-1">Kurum / Ünvan</p>
+                                                            <p className="text-sm font-bold text-slate-800 leading-snug">
+                                                                {appointment.kurum || "Kurum Belirtilmedi"}
+                                                            </p>
+                                                            {appointment.unvan && <p className="text-xs text-slate-500 mt-0.5">{appointment.unvan}</p>}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Konu */}
+                                                    {appointment.amac && (
+                                                        <div className="flex items-start gap-3">
+                                                            <MessageSquare className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
+                                                            <div>
+                                                                <p className="text-[10px] font-bold text-slate-400 uppercase leading-none mb-1">Konu</p>
+                                                                <p className="text-xs text-slate-600 leading-relaxed italic">"{appointment.amac}"</p>
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Kişisel Bilgi */}
+                                                    <div className="flex items-center gap-3 pt-2 border-t border-slate-100 mt-2">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 text-xs font-bold">
+                                                                {appointment.ad_soyad?.charAt(0) || "?"}
+                                                            </div>
+                                                            <span className="text-xs font-medium text-slate-700">{appointment.ad_soyad}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
                                     )
                                 })}
 
-                                {/* Interaction Layer for Adding */}
                                 {hours.map((hour) => (
                                     <div
                                         key={`slot-${hour}`}
@@ -425,7 +569,10 @@ export default function RandevuCalendarView({ appointments, date, onDateChange, 
                                         style={{ top: (hour - START_HOUR) * HOUR_HEIGHT, height: HOUR_HEIGHT }}
                                     >
                                         <div className="hidden group-hover:flex pl-2 pt-1 h-4 cursor-pointer hover:bg-black/[0.05] transition-colors rounded"
-                                            onClick={onAddClick}>
+                                            onClick={() => {
+                                                const timeStr = `${hour.toString().padStart(2, '0')}:00`;
+                                                onAddClick?.(date, timeStr);
+                                            }}>
                                         </div>
                                     </div>
                                 ))}
@@ -490,10 +637,11 @@ export default function RandevuCalendarView({ appointments, date, onDateChange, 
                                                 {/* Status Indicator */}
                                                 <div className={cn(
                                                     "w-1 h-10 rounded-full flex-shrink-0",
-                                                    appointment.durum === "Onaylandı" ? "bg-blue-500" :
-                                                        appointment.durum === "Görüşüldü" ? "bg-emerald-500" :
-                                                            appointment.durum === "Ertelendi" ? "bg-purple-500" :
-                                                                "bg-amber-500"
+                                                    getStatusConfig(appointment.durum).id === "APPROVED" ? "bg-blue-500" :
+                                                        getStatusConfig(appointment.durum).id === "COMPLETED" ? "bg-emerald-500" :
+                                                            getStatusConfig(appointment.durum).id === "RESCHEDULED_HOST" ? "bg-purple-500" :
+                                                                getStatusConfig(appointment.durum).id === "REJECTED" ? "bg-red-500" :
+                                                                    "bg-amber-500"
                                                 )}></div>
 
                                                 {/* Details */}
@@ -532,12 +680,9 @@ export default function RandevuCalendarView({ appointments, date, onDateChange, 
                                                 {/* Status Badge */}
                                                 <Badge className={cn(
                                                     "flex-shrink-0",
-                                                    appointment.durum === "Onaylandı" ? "bg-blue-100 text-blue-700" :
-                                                        appointment.durum === "Görüşüldü" ? "bg-emerald-100 text-emerald-700" :
-                                                            appointment.durum === "Ertelendi" ? "bg-purple-100 text-purple-700" :
-                                                                "bg-amber-100 text-amber-700"
+                                                    getStatusConfig(appointment.durum).color
                                                 )}>
-                                                    {appointment.durum || "Bekliyor"}
+                                                    {getStatusConfig(appointment.durum).label}
                                                 </Badge>
 
                                                 {/* Action Buttons */}
