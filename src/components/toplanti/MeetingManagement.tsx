@@ -83,8 +83,13 @@ interface Event {
     press?: boolean;
     agenda?: string;
     status?: string;
+    statusReason?: string;
+    postponedDate?: Date;
+    approvedBy?: string;
     documents?: any[];
 }
+
+const STATUS_OPTIONS = ["Onay Bekliyor", "Onaylandı", "Ertelendi", "İptal Edildi", "Tamamlandı"];
 
 // Custom Toolbar Component
 const CustomToolbar = (toolbar: any) => {
@@ -215,7 +220,10 @@ export default function MeetingManagement() {
         catering: '',
         press: false,
         agenda: '',
-        status: 'Onay Bekliyor'
+        status: 'Onay Bekliyor',
+        statusReason: '',
+        postponedDate: null as Date | null,
+        approvedBy: ''
     });
 
     const [deleteEventId, setDeleteEventId] = useState<number | null>(null);
@@ -251,7 +259,18 @@ export default function MeetingManagement() {
 
     // View Modal State
     const [viewModalOpen, setViewModalOpen] = useState(false);
+
     const [viewEvent, setViewEvent] = useState<Event | null>(null);
+
+    // Quick Status Update State
+    const [statusModalOpen, setStatusModalOpen] = useState(false);
+    const [statusUpdateData, setStatusUpdateData] = useState({
+        id: 0,
+        status: '',
+        statusReason: '',
+        postponedDate: null as Date | null,
+        approvedBy: ''
+    });
 
     // Edit Mode State
     const [editMode, setEditMode] = useState(false);
@@ -297,7 +316,12 @@ export default function MeetingManagement() {
                 const mappedEvents = eventJson.data.map((e: any) => ({
                     ...e,
                     start: new Date(e.start),
-                    end: new Date(e.end)
+                    end: new Date(e.end),
+                    documents: e.dokumanlar || [],
+                    status: e.durum,
+                    statusReason: e.durum_aciklamasi,
+                    postponedDate: e.ertelenen_tarih,
+                    approvedBy: e.onaylayan
                 }));
                 setEvents(mappedEvents);
             }
@@ -335,7 +359,10 @@ export default function MeetingManagement() {
             catering: '',
             press: false,
             agenda: '',
-            status: 'Onay Bekliyor'
+            status: 'Onay Bekliyor',
+            statusReason: '',
+            postponedDate: null,
+            approvedBy: ''
         });
         setBookingDate(undefined);
         setStartTime('');
@@ -366,7 +393,10 @@ export default function MeetingManagement() {
             catering: event.catering || '',
             press: event.press || false,
             agenda: event.agenda || '',
-            status: event.status || 'Onay Bekliyor'
+            status: event.status || 'Onay Bekliyor',
+            statusReason: event.statusReason || '',
+            postponedDate: event.postponedDate ? new Date(event.postponedDate) : null,
+            approvedBy: event.approvedBy || ''
         });
         setBookingDate(new Date(event.start));
         setStartTime(moment(event.start).format('HH:mm'));
@@ -487,6 +517,7 @@ export default function MeetingManagement() {
                 const newDoc = await saveRes.json();
                 setCurrentDocs(prev => [newDoc, ...prev]);
                 showToast("Belge yüklendi.", "success");
+                fetchData();
             } else {
                 const err = await saveRes.json();
                 throw new Error(err.error || "Kaydetme başarısız.");
@@ -507,6 +538,7 @@ export default function MeetingManagement() {
             if (res.ok) {
                 setCurrentDocs(prev => prev.filter(d => d.id !== docId));
                 showToast("Belge silindi.", "success");
+                fetchData();
             } else {
                 showToast("Silinemedi: " + res.statusText, "error");
             }
@@ -525,7 +557,10 @@ export default function MeetingManagement() {
             if (res.ok) {
                 setEvents(prev => prev.filter(e => e.id !== deleteEventId));
                 showToast("Toplantı silindi.", "success");
-            } else { showToast("Silinemedi.", "error"); }
+            } else {
+                const err = await res.json();
+                showToast(err.error || "Silinemedi.", "error");
+            }
         } catch { showToast("Hata oluştu.", "error"); }
         setDeleteEventOpen(false);
         setDeleteEventId(null);
@@ -602,10 +637,10 @@ export default function MeetingManagement() {
 
             if (res.ok) {
                 const result = await res.json();
-                const eventId = selectedEventId || result.data?.id; // Assuming POST returns data.id
+                const eventId = selectedEventId || result.data?.id || (result.created && result.created > 0 ? "new" : null);
 
                 // Handle File Uploads
-                if (eventId) {
+                if (eventId && eventId !== "new") {
                     const uploadFile = async (file: File, type: string) => {
                         const fd = new FormData();
                         fd.append('file', file);
@@ -619,7 +654,7 @@ export default function MeetingManagement() {
                                     body: JSON.stringify({
                                         dosya_adi: `${type}: ${file.name}`,
                                         dosya_yolu: upData.path,
-                                        dosya_tipi: type, // 'Gündem' or 'Katılımcı Listesi'
+                                        dosya_tipi: type,
                                         dosya_boyut: upData.size
                                     })
                                 });
@@ -639,11 +674,12 @@ export default function MeetingManagement() {
                 setCreatePanelOpen(false);
                 fetchData();
             } else {
-                showToast("İşlem başarısız.", "error");
+                const err = await res.json();
+                showToast(err.error || "İşlem başarısız.", "error");
             }
-        } catch (e) {
+        } catch (e: any) {
             console.error(e);
-            showToast("Hata oluştu.", "error");
+            showToast("Hata oluştu: " + (e.message || String(e)), "error");
         }
     };
 
@@ -801,6 +837,42 @@ export default function MeetingManagement() {
 
         return matchesSearch && matchesTime;
     });
+
+    const openStatusModal = (event: Event) => {
+        setStatusUpdateData({
+            id: event.id,
+            status: event.status || 'Onay Bekliyor',
+            statusReason: event.statusReason || '',
+            postponedDate: event.postponedDate ? new Date(event.postponedDate) : null,
+            approvedBy: event.approvedBy || ''
+        });
+        setStatusModalOpen(true);
+    };
+
+    const handleQuickStatusSave = async () => {
+        try {
+            const res = await fetch(`/api/toplanti/${statusUpdateData.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    status: statusUpdateData.status,
+                    statusReason: statusUpdateData.statusReason,
+                    postponedDate: statusUpdateData.postponedDate,
+                    approvedBy: statusUpdateData.approvedBy
+                })
+            });
+            if (res.ok) {
+                showToast('Durum güncellendi.', 'success');
+                setStatusModalOpen(false);
+                fetchData();
+            } else {
+                showToast('Güncelleme başarısız.', 'error');
+            }
+        } catch (err) {
+            console.error(err);
+            showToast('Hata oluştu.', 'error');
+        }
+    };
 
     const handleExportExcel = () => {
         const headers = ["Konu", "Tarih", "Saat", "Salon", "Düzenleyen", "Durum"];
@@ -1047,6 +1119,7 @@ export default function MeetingManagement() {
                                             <th className="py-4 px-6 text-xs font-bold text-slate-500 uppercase tracking-wider">Konu</th>
                                             <th className="py-4 px-6 text-xs font-bold text-slate-500 uppercase tracking-wider">Salon</th>
                                             <th className="py-4 px-6 text-xs font-bold text-slate-500 uppercase tracking-wider">Düzenleyen</th>
+                                            <th className="py-4 px-6 text-xs font-bold text-slate-500 uppercase tracking-wider">Durum</th>
                                             <th className="py-4 px-6 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">İşlemler</th>
                                         </tr>
                                     </thead>
@@ -1091,6 +1164,29 @@ export default function MeetingManagement() {
                                                                 </div>
                                                                 {event.organizer || '-'}
                                                             </div>
+
+                                                        </td>
+                                                        <td className="py-4 px-6">
+                                                            <button
+                                                                onClick={() => openStatusModal(event)}
+                                                                className={`inline-flex px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide border hover:scale-105 transition-transform cursor-pointer ${event.status === 'Onaylandı' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
+                                                                        event.status === 'Ertelendi' ? 'bg-amber-50 text-amber-600 border-amber-100' :
+                                                                            event.status === 'İptal Edildi' || event.status === 'İptal' ? 'bg-red-50 text-red-600 border-red-100' :
+                                                                                event.status === 'Tamamlandı' ? 'bg-blue-50 text-blue-600 border-blue-100' :
+                                                                                    'bg-slate-50 text-slate-500 border-slate-100'
+                                                                    }`}>
+                                                                {event.status || 'Onay Bekliyor'}
+                                                            </button>
+                                                            {event.statusReason && (
+                                                                <div className="text-[10px] text-slate-400 mt-1 max-w-[150px] truncate" title={event.statusReason}>
+                                                                    {event.statusReason}
+                                                                </div>
+                                                            )}
+                                                            {event.status === 'Ertelendi' && event.postponedDate && (
+                                                                <div className="text-[10px] text-amber-600 font-medium mt-0.5">
+                                                                    {moment(event.postponedDate).format('DD.MM.YYYY')}
+                                                                </div>
+                                                            )}
                                                         </td>
                                                         <td className="py-4 px-6 text-right">
                                                             <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1400,6 +1496,80 @@ export default function MeetingManagement() {
                 variant="danger"
             />
 
+            {/* Status Update Modal */}
+            <Modal
+                open={statusModalOpen}
+                onClose={() => setStatusModalOpen(false)}
+                title="Durum Güncelle"
+                size="md"
+            >
+                <div className="space-y-4">
+                    <div className="space-y-1.5">
+                        <label className="text-sm font-semibold text-slate-700">Durum</label>
+                        <select
+                            className="w-full border border-slate-200 bg-white p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 outline-none"
+                            value={statusUpdateData.status}
+                            onChange={e => setStatusUpdateData({ ...statusUpdateData, status: e.target.value })}
+                        >
+                            {STATUS_OPTIONS.map(opt => (
+                                <option key={opt} value={opt}>{opt}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {(statusUpdateData.status === 'Onaylandı' || statusUpdateData.status === 'Tamamlandı' || statusUpdateData.status === 'Ertelendi') && (
+                        <div className="space-y-1.5">
+                            <label className="text-sm font-semibold text-slate-700">
+                                {statusUpdateData.status === 'Onaylandı' ? 'Onaylayan Makam' : 'İşlem Yapan'}
+                            </label>
+                            <input
+                                type="text"
+                                className="w-full border border-slate-200 bg-white p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 outline-none"
+                                placeholder="Örn: Vali Yardımcısı"
+                                value={statusUpdateData.approvedBy}
+                                onChange={e => setStatusUpdateData({ ...statusUpdateData, approvedBy: e.target.value })}
+                            />
+                        </div>
+                    )}
+
+                    {statusUpdateData.status === 'Ertelendi' && (
+                        <div className="space-y-1.5">
+                            <label className="text-sm font-semibold text-slate-700">Ertelenen Tarih</label>
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button variant="outline" className={cn("w-full justify-start text-left font-normal bg-white h-10 border-slate-200")}>
+                                        <CalendarIcon className="mr-2 h-4 w-4 text-slate-500" />
+                                        {statusUpdateData.postponedDate ? format(statusUpdateData.postponedDate, "d MMMM yyyy", { locale: tr }) : <span>Tarih seçin</span>}
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0" align="start">
+                                    <SmallCalendar mode="single" selected={statusUpdateData.postponedDate || undefined} onSelect={(date) => setStatusUpdateData({ ...statusUpdateData, postponedDate: date || null })} initialFocus />
+                                </PopoverContent>
+                            </Popover>
+                        </div>
+                    )}
+
+                    {(statusUpdateData.status === 'Ertelendi' || statusUpdateData.status === 'İptal Edildi' || statusUpdateData.status === 'İptal') && (
+                        <div className="space-y-1.5">
+                            <label className="text-sm font-semibold text-slate-700">
+                                {statusUpdateData.status === 'Ertelendi' ? 'Erteleme Nedeni' : 'İptal Nedeni'}
+                            </label>
+                            <textarea
+                                className="w-full border border-slate-200 bg-white p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 outline-none h-24 resize-none"
+                                placeholder="Açıklama giriniz..."
+                                value={statusUpdateData.statusReason}
+                                onChange={e => setStatusUpdateData({ ...statusUpdateData, statusReason: e.target.value })}
+                            />
+                        </div>
+                    )}
+
+                    <div className="flex justify-end gap-2 pt-2">
+                        <Button variant="outline" onClick={() => setStatusModalOpen(false)}>İptal</Button>
+                        <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={handleQuickStatusSave}>Kaydet</Button>
+                    </div>
+                </div>
+            </Modal>
+
             {/* Create Meeting Modal */}
             <Modal
                 open={isCreatePanelOpen}
@@ -1646,14 +1816,66 @@ export default function MeetingManagement() {
                                     value={formData.status}
                                     onChange={e => setFormData({ ...formData, status: e.target.value })}
                                 >
-                                    <option value="Taslak">Taslak</option>
-                                    <option value="Onay Bekliyor">Onay Bekliyor</option>
-                                    <option value="Onaylandı">Onaylandı</option>
-                                    <option value="Ertelendi">Ertelendi</option>
-                                    <option value="İptal">İptal Edildi</option>
+                                    {STATUS_OPTIONS.map(opt => (
+                                        <option key={opt} value={opt}>{opt}</option>
+                                    ))}
                                 </select>
+
                             </div>
+
                         </div>
+
+                        {/* Status Details */}
+                        {(formData.status === 'Ertelendi' || formData.status === 'İptal Edildi' || formData.status === 'İptal' || formData.status === 'Onaylandı' || formData.status === 'Tamamlandı') && (
+                            <div className="bg-slate-50 rounded-lg p-3 border border-slate-200 grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2">
+                                {(formData.status === 'Onaylandı' || formData.status === 'Tamamlandı' || formData.status === 'Ertelendi') && (
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                                            {formData.status === 'Onaylandı' ? 'Onaylayan Makam' : 'İşlem Yapan / Onaylayan'}
+                                        </label>
+                                        <input
+                                            type="text"
+                                            className="w-full border border-slate-200 bg-white p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 outline-none"
+                                            placeholder="Örn: Vali Yardımcısı"
+                                            value={formData.approvedBy}
+                                            onChange={e => setFormData({ ...formData, approvedBy: e.target.value })}
+                                        />
+                                    </div>
+                                )}
+
+                                {formData.status === 'Ertelendi' && (
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Ertelenme Tarihi</label>
+                                        <Popover>
+                                            <PopoverTrigger asChild>
+                                                <Button variant="outline" className={cn("w-full justify-start text-left font-normal bg-white h-10 border-slate-200")}>
+                                                    <CalendarIcon className="mr-2 h-4 w-4 text-slate-500" />
+                                                    {formData.postponedDate ? format(formData.postponedDate, "d MMMM yyyy", { locale: tr }) : <span>Tarih seçin</span>}
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-auto p-0" align="start">
+                                                <SmallCalendar mode="single" selected={formData.postponedDate || undefined} onSelect={(date) => setFormData({ ...formData, postponedDate: date || null })} initialFocus />
+                                            </PopoverContent>
+                                        </Popover>
+                                    </div>
+                                )}
+
+                                {(formData.status === 'Ertelendi' || formData.status === 'İptal Edildi' || formData.status === 'İptal') && (
+                                    <div className="space-y-1.5 md:col-span-2">
+                                        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                                            {formData.status === 'Ertelendi' ? 'Erteleme Nedeni' : 'İptal Nedeni'}
+                                        </label>
+                                        <textarea
+                                            className="w-full border border-slate-200 bg-white p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 outline-none h-16 resize-none"
+                                            placeholder="Açıklama giriniz..."
+                                            value={formData.statusReason}
+                                            onChange={e => setFormData({ ...formData, statusReason: e.target.value })}
+                                        />
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
 
                         <div className="space-y-1.5">
                             <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Gündem Maddeleri</label>
@@ -1883,8 +2105,8 @@ export default function MeetingManagement() {
                             Toplantıyı Oluştur
                         </Button>
                     </div>
-                </div>
-            </Modal>
+                </div >
+            </Modal >
 
             {/* Create Meeting Drawer */}
             {/* Drawer Disabled in favor of Modal */ false && (
@@ -1958,7 +2180,8 @@ export default function MeetingManagement() {
                         </div>
                     </div>
                 </>
-            )}
+            )
+            }
 
             {/* DOCUMENTS MODAL */}
             {

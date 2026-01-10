@@ -59,8 +59,9 @@ export async function POST(req: Request) {
     try {
         const body = await req.json();
         const {
-            title, resourceId, start, end, organizer, isProtocol, recurrence, repeatCount,
-            type, description, format, equipment, participants, catering, press, agenda, status
+            title, resourceId, start, end, organizer, isProtocol, recurrence, repeatCount, type,
+            description, format, equipment, participants, catering, press, agenda,
+            status, statusReason, postponedDate, approvedBy
         } = body;
 
         let currentStart = new Date(start);
@@ -97,7 +98,10 @@ export async function POST(req: Request) {
                     ikram_talebi: catering,
                     fotograf_basin: press,
                     gundem_maddeleri: agenda,
-                    durum: status || "Onay Bekliyor"
+                    durum: status || "Onay Bekliyor",
+                    durum_aciklamasi: statusReason,
+                    ertelenen_tarih: postponedDate ? new Date(postponedDate) : null,
+                    onaylayan: approvedBy
                 }
             });
             createdEvents.push(newRez);
@@ -118,10 +122,10 @@ export async function POST(req: Request) {
             }
         }
 
-        return NextResponse.json({ success: true, created: createdEvents.length });
+        return NextResponse.json({ success: true, created: createdEvents.length, data: createdEvents[0] });
 
-    } catch (error) {
+    } catch (error: any) {
         console.error("Kayıt hatası:", error);
-        return NextResponse.json({ success: false, error: "Kayıt oluşturulamadı." }, { status: 500 });
+        return NextResponse.json({ success: false, error: "Kayıt oluşturulamadı: " + (error.message || String(error)) }, { status: 500 });
     }
 }

@@ -3,7 +3,8 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+    const params = await props.params;
     const toplantiId = parseInt(params.id);
     if (isNaN(toplantiId)) {
         return NextResponse.json({ error: 'Geçersiz ID' }, { status: 400 });
@@ -28,7 +29,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }
 }
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+    const params = await props.params;
     const toplantiId = parseInt(params.id);
     if (isNaN(toplantiId)) {
         return NextResponse.json({ error: 'Geçersiz ID' }, { status: 400 });

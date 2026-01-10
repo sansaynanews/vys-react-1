@@ -5,7 +5,8 @@ import { join } from 'path';
 
 const prisma = new PrismaClient();
 
-export async function DELETE(request: NextRequest, { params }: { params: { docId: string } }) {
+export async function DELETE(request: NextRequest, props: { params: Promise<{ docId: string }> }) {
+    const params = await props.params;
     const docId = parseInt(params.docId);
     if (isNaN(docId)) {
         return NextResponse.json({ error: 'Geçersiz ID' }, { status: 400 });

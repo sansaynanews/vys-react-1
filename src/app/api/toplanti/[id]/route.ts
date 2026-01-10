@@ -1,33 +1,59 @@
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import fs from 'fs/promises';
+import path from 'path';
 
-export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(req: Request, props: { params: Promise<{ id: string }> }) {
     try {
+        const params = await props.params;
         const id = Number(params.id);
+
+        // 1. İlgili dosyaları bul
+        const docs = await prisma.toplanti_dokumanlari.findMany({
+            where: { toplanti_id: id }
+        });
+
+        // 2. Fiziksel dosyaları sil
+        for (const doc of docs) {
+            try {
+                // Dosya yolları genellikle "/uploads/..." şeklindedir. Baştaki "/" işaretini kaldırarak path.join ile kullanmalıyız.
+                const filePath = path.join(process.cwd(), 'public', doc.dosya_yolu.replace(/^\//, ''));
+                await fs.unlink(filePath);
+            } catch (err) {
+                console.error("Fiziksel dosya silinemedi:", doc.dosya_yolu, err);
+                // Dosya zaten yoksa devam et
+            }
+        }
+
+        // 3. Veritabanı kaydını sil (Cascade ile dokuman kayıtları da silinir)
         await prisma.salon_rezervasyonlari.delete({
             where: { id }
         });
         return NextResponse.json({ success: true });
-    } catch (error) {
+    } catch (error: any) {
         console.error("Silme hatası:", error);
-        return NextResponse.json({ success: false, error: "Silinemedi." }, { status: 500 });
+        return NextResponse.json({ success: false, error: "Silinemedi: " + (error.message || String(error)) }, { status: 500 });
     }
 }
 
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
+export async function PUT(req: Request, props: { params: Promise<{ id: string }> }) {
     try {
+        const params = await props.params;
         const id = Number(params.id);
         const body = await req.json();
 
         // Gelen veriler
         const {
-            start, end, resourceId,
-            type, description, format, equipment, participants, catering, press, agenda, status, isProtocol
+            title, organizer, start, end, resourceId,
+            type, description, format, equipment, participants, catering, press, agenda,
+            status, statusReason, postponedDate, approvedBy, isProtocol
         } = body;
 
         const updateData: any = {};
 
+        if (title !== undefined) updateData.baslik = title;
+        if (organizer !== undefined) updateData.rez_sahibi = organizer;
         if (start && end) {
             const startDate = new Date(start);
             const endDate = new Date(end);
@@ -55,7 +81,11 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
         if (catering !== undefined) updateData.ikram_talebi = catering;
         if (press !== undefined) updateData.fotograf_basin = press;
         if (agenda !== undefined) updateData.gundem_maddeleri = agenda;
+
         if (status !== undefined) updateData.durum = status;
+        if (statusReason !== undefined) updateData.durum_aciklamasi = statusReason;
+        if (postponedDate !== undefined) updateData.ertelenen_tarih = postponedDate ? new Date(postponedDate) : null;
+        if (approvedBy !== undefined) updateData.onaylayan = approvedBy;
 
         if (isProtocol !== undefined || description !== undefined) {
             const desc = description || "";

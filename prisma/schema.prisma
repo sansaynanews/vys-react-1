@@ -348,6 +348,9 @@ model salon_rezervasyonlari {
   fotograf_basin    Boolean?  @default(false)
   gundem_maddeleri  String?   @db.Text
   durum             String?   @default("Onay Bekliyor") @db.VarChar(50)
+  durum_aciklamasi  String?   @db.Text
+  ertelenen_tarih   DateTime? @db.Date
+  onaylayan         String?   @db.VarChar(100)
   dokumanlar        toplanti_dokumanlari[]
 }
 
